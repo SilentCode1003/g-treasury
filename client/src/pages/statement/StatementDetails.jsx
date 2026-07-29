@@ -22,8 +22,8 @@ import {
   isStoreNumberColumn,
   isRowNumberColumn,
 } from './Statementformatters'
-import { exportStatementToExcel } from './StatementexcelExport'
-import { exportStatementToPdf } from './StatementpdfExport'
+import { exportStatementToExcel } from './Statementexcelexport'
+import { exportStatementToPdf } from './Statementpdfexport'
 
 const normalizeHeaderKey = (value = '') =>
   String(value ?? '')
