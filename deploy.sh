@@ -2,7 +2,7 @@
 set -e
 
 echo "------------------------------------------"
-echo "🛠️  Refreshing Services: EMAIS System"
+echo "🛠️  Refreshing Services: G-Treasury System"
 echo "------------------------------------------"
 
 echo "🧹 Clearing lockfile to prevent Linux binary errors..."
@@ -17,25 +17,25 @@ if [ ! -f .env ]; then
 fi
 
 echo "🔄 Managing Backend Process..."
-if pm2 show "EMAIS SERVER" > /dev/null; then
-    echo "♻️  Resetting EMAIS SERVER to apply new config..."
-    pm2 delete "EMAIS SERVER"
+if pm2 show "G-Treasury SERVER" > /dev/null; then
+    echo "♻️  Resetting G-Treasury SERVER to apply new config..."
+    pm2 delete "G-Treasury SERVER"
 fi
 
-echo "✨ Starting EMAIS SERVER..."
-pm2 start server/server.js --name "EMAIS SERVER" --cwd $(pwd) --node-args="-r dotenv/config"
+echo "✨ Starting G-Treasury SERVER..."
+pm2 start server/server.js --name "G-Treasury SERVER" --cwd $(pwd) --node-args="-r dotenv/config"
 
 echo "🌐 Managing Frontend Process..."
 echo "🏗️  Building optimized production client..."
 npm run build -w client
 
-if pm2 show "EMAIS CLIENT" > /dev/null; then
-    echo "♻️  Resetting EMAIS CLIENT..."
-    pm2 delete "EMAIS CLIENT"
+if pm2 show "G-Treasury CLIENT" > /dev/null; then
+    echo "♻️  Resetting G-Treasury CLIENT..."
+    pm2 delete "G-Treasury CLIENT"
 fi
 
-echo "✨ Starting EMAIS CLIENT (Preview Mode)..."
-pm2 start "npm run start -w client" --name "EMAIS CLIENT"
+echo "✨ Starting G-Treasury CLIENT (Preview Mode)..."
+pm2 start "npm run start -w client" --name "G-Treasury CLIENT"
 
 pm2 save
 
