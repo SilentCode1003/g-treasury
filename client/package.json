@@ -7,7 +7,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "start": "vite build && vite preview --host"
+    "start": "vite preview --host"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
