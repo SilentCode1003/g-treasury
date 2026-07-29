@@ -1,0 +1,28 @@
+const { auth } = require('../middlewares/auth.middleware')
+const { healthRouter } = require('../routes/health.routes')
+const { accessRouter } = require('../routes/access.routes')
+const { companyRouter } = require('../routes/company.routes')
+const { departmentRouter } = require('../routes/department.routes')
+const { serviceRouter } = require('../routes/service.routes')
+const { storeRouter } = require('../routes/store.routes')
+const { userRouter } = require('../routes/user.routes')
+const { routeAccessRouter } = require('../routes/route_access.routes')
+const { credentialsRouter } = require('../routes/credentials.routes')
+const { statementRouter } = require('../routes/statement.routes')
+const { EncryptString } = require('../utilities/cryptography.util')
+console.log('Encrypted', EncryptString('admin'))
+const initRoutes = (app) => {
+  app.use('/', credentialsRouter)
+  app.use('/health', healthRouter)
+  app.use('/access', accessRouter)
+  app.use('/company', companyRouter)
+  app.use('/department', departmentRouter)
+  app.use('/service', serviceRouter)
+  app.use('/store', storeRouter)
+  app.use('/user', userRouter)
+  app.use('/route-access', routeAccessRouter)
+  app.use('/statement', statementRouter)
+  //app.use(auth)
+}
+
+module.exports = { initRoutes }

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>401 Unauthorized</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <h1>Access Denied</h1>
+    
+    <p class="unauthorized-text" style="color: red; font-weight: bold;">
+      {{ERROR_MESSAGE}}
+    </p>
+
+    <button
+      onclick="handleLogin()"
+      style="
+        padding: 10px 20px;
+        font-family: 'Share Tech Mono';
+        cursor: pointer;
+        margin: 20px auto;
+        display: block;
+        border-radius: 5px;
+        width: 225px;
+        height: 75px;
+        text-align: center;
+        font-size: 22px;
+      "
+    >
+      Click to Login
+    </button>
+
+    <script>
+      async function handleLogin() {
+        const userName = prompt('Enter Username:')
+        const password = prompt('Enter Password:')
+
+        if (userName && password) {
+          try {
+            const response = await fetch('/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userName, password }), 
+            })
+
+            if (response.ok) {
+              window.location.reload(); 
+            } else {
+              alert('Login Failed: Invalid credentials.')
+            }
+          } catch (error) {
+            alert('Server Error: Could not connect to login.')
+          }
+        }
+      }
+    </script>
+  </body>
+</html>

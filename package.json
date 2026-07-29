@@ -1,0 +1,36 @@
+{
+  "name": "my-monorepo-app",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "start": "concurrently \"npm run start:server\" \"npm run start:client\"",
+    "start:server": "dotenv -e .env -- npm run start -w server",
+    "start:client": "dotenv -e .env -- npm run start -w client",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "dotenv -e .env -- npm run dev -w server",
+    "dev:client": "dotenv -e .env -- npm run dev -w client",
+    "db:setup": "dotenv -e .env -- npm run db:setup -w server",
+    "db:create": "dotenv -e .env -- npm run db:create -w server",
+    "db:status": "dotenv -e .env -- npm run db:status -w server",
+    "db:reset": "dotenv -e .env -- npm run db:reset -w server",
+    "db:drop": "dotenv -e .env -- npm run db:drop -w server",
+    "migrate": "dotenv -e .env -- npm run db:migrate -w server",
+    "migrate:undo": "dotenv -e .env -- npm run db:migrate:undo -w server",
+    "seed": "dotenv -e .env -- npm run db:seed -w server",
+    "migration:create": "npm run db:generate:migration -w server --",
+    "seeder:create": "npm run db:generate:seeder -w server --",
+    "generate:models": "dotenv -e .env -- npm run db:generate:models -w server",
+    "swagger": "dotenv -e .env -- npm run swagger -w server",
+    "encrypt": "dotenv -e .env -- npm run encrypt -w server",
+    "decrypt": "dotenv -e .env -- npm run decrypt -w server",
+    "make:feature": "dotenv -e .env -- npm run make:feature -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "dotenv-cli": "^7.3.0"
+  }
+}

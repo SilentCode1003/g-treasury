@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+
+/* You can add custom v4 theme variables here if needed */
+@theme {
+  --color-primary: #3b82f6;
+}
