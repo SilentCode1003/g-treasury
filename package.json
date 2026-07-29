@@ -1,5 +1,5 @@
 {
-  "name": "my-monorepo-app",
+  "name": "G-Treasury",
   "version": "1.0.0",
   "private": true,
   "workspaces": [
@@ -7,7 +7,7 @@
     "server"
   ],
   "scripts": {
-    "start": "concurrently \"npm run start:server\" \"npm run start:client\"",
+    "start": "concurrently \"npm run server\" \"npm run client\"",
     "start:server": "dotenv -e .env -- npm run start -w server",
     "start:client": "dotenv -e .env -- npm run start -w client",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
