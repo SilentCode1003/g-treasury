@@ -21,7 +21,7 @@ import {
   isStoreNameColumn,
   isStoreNumberColumn,
   isRowNumberColumn,
-} from './statementFormatters'
+} from './Statementformatters'
 import { exportStatementToExcel } from './statementExcelExport'
 import { exportStatementToPdf } from './statementPdfExport'
 

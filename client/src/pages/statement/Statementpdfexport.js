@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
-import { formatDecimalValue, buildContactLine, getExportCellValue } from './statementFormatters'
+import { formatDecimalValue, buildContactLine, getExportCellValue } from './Statementformatters'
 import logo from '../../../assets/logo.png'
 
 // Builds and downloads a .pdf replica of the paper Statement of Account:
