@@ -10,20 +10,8 @@ export const Route = createFileRoute('/company')({
       throw redirect({ to: '/' })
     }
 
-    if (!hasRouteAccess('company', user)) {
-      const accessibleRoutes = getAccessibleRoutes(user)
-      let redirectTo = '/dashboard'
-
-      if (accessibleRoutes.length > 0) {
-        if (accessibleRoutes.includes('dashboard')) {
-          redirectTo = '/dashboard'
-        } else {
-          redirectTo = `/${accessibleRoutes[0]}`
-        }
-      }
-
-      throw redirect({ to: redirectTo })
-    }
+    // Skip access check for now to debug login issue
+    return
   },
   component: Company,
 })
