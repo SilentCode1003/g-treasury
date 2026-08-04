@@ -18,6 +18,7 @@ const login = async (req, res) => {
       })
     }
 
+    
     const { sql: userSql, bindings: userBindings } = sql
       .select([
         { col: Master.master_user.selectOptionColumns.id, as: 'id' },
