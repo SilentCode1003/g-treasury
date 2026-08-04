@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   LayoutDashboard,
@@ -12,10 +12,12 @@ import {
   ShoppingBag,
   User,
   ChevronRight,
+  Shield,
 } from 'lucide-react'
+import { getAccessibleRoutes } from '../../utils/routeProtection'
 import logo from '../../../assets/logo.png'
 
-const menuItems = [
+const allMenuItems = [
   {
     id: 'dashboard',
     label: 'Dashboard',
@@ -23,7 +25,7 @@ const menuItems = [
   },
 ]
 
-const masterItems = [
+const allMasterItems = [
   {
     id: 'company',
     label: 'Company',
@@ -50,6 +52,11 @@ const masterItems = [
     icon: User,
   },
   {
+    id: 'access',
+    label: 'Access',
+    icon: Shield,
+  },
+  {
     id: 'statement',
     label: 'Statement',
     icon: FileText,
@@ -72,6 +79,36 @@ export default function Sidebar({
   onNavigate,
 }) {
   const [mastersOpen, setMastersOpen] = useState(true)
+
+  const user = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user'))
+    } catch {
+      return null
+    }
+  }, [])
+
+  const accessibleRoutes = useMemo(() => {
+    if (!user) return []
+    const routes = getAccessibleRoutes(user)
+    console.log('Accessible routes for user:', user, '=>', routes)
+    return routes
+  }, [user])
+
+  const menuItems = useMemo(() => {
+    if (!user) return allMenuItems
+    const filtered = allMenuItems.filter((item) => accessibleRoutes.includes(item.id))
+    console.log('Menu items filtered:', filtered)
+    return filtered
+  }, [user, accessibleRoutes])
+
+  const masterItems = useMemo(() => {
+    if (!user) return allMasterItems
+    const filtered = allMasterItems.filter((item) => accessibleRoutes.includes(item.id))
+    console.log('Master items filtered:', filtered)
+    return filtered
+  }, [user, accessibleRoutes])
+
   return (
     <>
       {/* Mobile backdrop */}

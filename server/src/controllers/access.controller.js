@@ -36,7 +36,7 @@ const getAccess = async (req, res, next) => {
 
 const createAccess = async (req, res, next) => {
   try {
-    const { access_name, status } = req.body
+    const { access_name, description, status } = req.body
 
     if (!access_name || !status) {
       return res.status(400).json({
@@ -48,7 +48,7 @@ const createAccess = async (req, res, next) => {
     const insertAccessQuery = sql
       .insert(
         Master.master_access.tablename,
-        { access_name, status },
+        { name: access_name, status },
         { prefix: Master.master_access.prefix },
       )
       .build()
@@ -60,89 +60,14 @@ const createAccess = async (req, res, next) => {
       throw new Error('Failed to create access')
     }
 
-    const routes = [
-      'dashboard',
-      'access',
-      'users',
-      'customers',
-      'vendors',
-      'charts',
-      'proforma_entries',
-      'product_service',
-      'company',
-      'receipts',
-      'disbursement',
-      'sales',
-      'collections',
-      'purchase',
-      'payments',
-      'adjustments',
-      'vat',
-      'witholding_tax',
-      'trial_balance',
-      'income_statement',
-      'general_ledger',
-      'balance_sheet',
-      'journal_entries',
-      'statement_of_comprehensive_income',
-      'bank_reconciliation',
-      'audit_trail',
-      'aging_receivables',
-      'customer_transactions',
-      'vendor_transactions',
-      'advances',
-      'purchase_order',
-    ]
-
-    const transactionQueries = []
-
-    routes.forEach((route) => {
-      const routeQuery = sql
-        .insert(
-          Master.master_route_access.tablename,
-          {
-            access_id: newAccessId,
-            name: route,
-            status: 'Full Access',
-          },
-          { prefix: Master.master_route_access.prefix },
-        )
-        .build()
-
-      transactionQueries.push({
-        sql: routeQuery.sql,
-        values: routeQuery.bindings,
-      })
-    })
-
-    const now = new Date()
-    const auditQuery = sql
-      .insert(
-        Master.audit_trail.tablename,
-        {
-          transaction_id: newAccessId,
-          module: 'ACCESS',
-          performed_by: req.context?.username || null,
-          created_date: now.toISOString().split('T')[0],
-          created_time: now.toTimeString().split(' ')[0],
-          action: `CREATE: ID ${newAccessId}`,
-        },
-        { prefix: Master.audit_trail.prefix },
-      )
-      .build()
-
-    transactionQueries.push({ sql: auditQuery.sql, values: auditQuery.bindings })
-
-    await Transaction(transactionQueries)
-
     return res.status(201).json({
       success: true,
-      message: 'Access created successfully with all routes',
+      message: 'Access created successfully',
       data: {
-        id: newAccessId,
-        ma_access_name: access_name,
-        ma_status: status,
-        routes_created: routes.length,
+        access_id: newAccessId,
+        access_name,
+        description,
+        status,
       },
       timestamp: new Date().toISOString(),
     })

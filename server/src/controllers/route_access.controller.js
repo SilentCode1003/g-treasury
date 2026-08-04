@@ -35,6 +35,47 @@ const getRouteAccess = async (req, res, next) => {
   }
 }
 
+const getRouteAccessByAccessId = async (req, res, next) => {
+  try {
+    const accessId = Number(req.params.accessId)
+
+    if (!accessId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Access id is required',
+      })
+    }
+
+    const { sql: query, bindings } = sql
+      .select([
+        { col: Master.master_route_access.selectOptionColumns.id, as: 'route_access_id' },
+        { col: Master.master_route_access.selectOptionColumns.access_id, as: 'access_id' },
+        { col: Master.master_route_access.selectOptionColumns.name, as: 'name' },
+        { col: Master.master_route_access.selectOptionColumns.status, as: 'status' },
+      ])
+      .from(Master.master_route_access.tablename)
+      .where(Master.master_route_access.selectOptionColumns.access_id, accessId)
+      .build()
+
+    const routeAccesses = await Query(query, bindings)
+
+    return res.status(200).json({
+      success: true,
+      message: 'Route accesses retrieved successfully',
+      data: routeAccesses,
+      count: routeAccesses.length,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    console.error('Error fetching route accesses by access id:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching route accesses',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    })
+  }
+}
+
 const createRouteAccess = async (req, res, next) => {
   try {
     const { access_id, name, status } = req.body
@@ -142,6 +183,7 @@ const updateRouteAccess = async (req, res, next) => {
 
 module.exports = {
   getRouteAccess,
+  getRouteAccessByAccessId,
   createRouteAccess,
   updateRouteAccess,
 }

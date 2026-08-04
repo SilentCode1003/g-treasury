@@ -7,6 +7,8 @@ export default function DynamicTable({
   registryLabel = 'Corporate Registry',
   footerLabel = 'Core Ledger Alignment Secure',
   footerMeta = 'Registry System Integrated',
+  onRowClick = null,
+  selectedRowId = null,
 }) {
   // Local states managing user interface controls
   const [localSearchQuery, setLocalSearchQuery] = useState('')
@@ -175,7 +177,15 @@ export default function DynamicTable({
           <tbody className="divide-y divide-gray-100 text-xs font-medium text-gray-700">
             {filteredData.length > 0 ? (
               filteredData.map((row, rowIdx) => (
-                <tr key={row.id || rowIdx} className="hover:bg-gray-50/50 transition-colors">
+                <tr
+                  key={row.id || rowIdx}
+                  onClick={() => onRowClick && onRowClick(row)}
+                  className={`${
+                    onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
+                  } transition-colors ${
+                    selectedRowId && row.id === selectedRowId ? 'bg-red-50' : ''
+                  }`}
+                >
                   {columns.map((col, colIdx) => (
                     <td
                       key={colIdx}

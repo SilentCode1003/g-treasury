@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import Statement from '../pages/statement/Statement'
+import Access from '../pages/access/Access'
 import { hasRouteAccess, getAccessibleRoutes } from '../utils/routeProtection'
 
-export const Route = createFileRoute('/statement')({
+export const Route = createFileRoute('/access')({
   beforeLoad: async () => {
     const user = JSON.parse(localStorage.getItem('user'))
 
@@ -10,7 +10,7 @@ export const Route = createFileRoute('/statement')({
       throw redirect({ to: '/' })
     }
 
-    if (!hasRouteAccess('statement', user)) {
+    if (!hasRouteAccess('access', user)) {
       const accessibleRoutes = getAccessibleRoutes(user)
       let redirectTo = '/dashboard'
 
@@ -25,7 +25,7 @@ export const Route = createFileRoute('/statement')({
       throw redirect({ to: redirectTo })
     }
   },
-  component: Statement,
+  component: Access,
 })
 
-export default Statement
+export default Access

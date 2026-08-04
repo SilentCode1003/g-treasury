@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "npm run swagger && node server.js",
+    "start": "node server.js",
     "dev": "nodemon --trace-deprecation --ignore src/docs/swagger-output.json --ignore src/utilities/swagger-temp-loader.util.js server.js",
     "---- DATABASE MANAGEMENT ----": "-------------------------",
     "db:status": "node src/database/utilities/check-migration.util.js",

@@ -417,12 +417,22 @@ function useLoginForm() {
     }
 
     try {
-      await apiClient.post('/login', {
+      const response = await apiClient.post('/login', {
         username,
         password,
       })
 
+      console.log('Login response:', response.data)
+
+      const userData = response.data?.data || response.data
+
+      if (userData) {
+        localStorage.setItem('user', JSON.stringify(userData))
+        console.log('User stored in localStorage:', userData)
+      }
+
       setStatus('success')
+      console.log('Navigating to dashboard...')
       navigate({ to: '/dashboard' })
     } catch (err) {
       console.error('Login error:', err)
