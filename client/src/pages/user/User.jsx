@@ -29,19 +29,23 @@ const getInitialForm = () => ({
   status: 'ACTIVE',
 })
 
-const mapUser = (item) => ({
-  id: item.user_id ?? item.id,
-  employeeId: item.employee_id || item.employeeId || '—',
-  fullName: item.fullname || item.fullName || 'Unnamed user',
-  username: item.username || '—',
-  access_id: item.access_id != null ? Number(item.access_id) : 1,
-  accessLevel: item.access_id ? `Tier ${Math.min(3, Number(item.access_id))}` : 'Tier 1',
-  status: formatStatus(item.status),
-  rawStatus: String(item.status || 'ACTIVE').toUpperCase(),
-})
+const mapUser = (item, accessList = []) => {
+  const access = accessList.find(a => (a.access_id || a.id) === item.access_id)
+  return {
+    id: item.user_id ?? item.id,
+    employeeId: item.employee_id || item.employeeId || '—',
+    fullName: item.fullname || item.fullName || 'Unnamed user',
+    username: item.username || '—',
+    access_id: item.access_id != null ? Number(item.access_id) : 1,
+    accessName: access?.name || access?.access_name || 'Unknown',
+    status: formatStatus(item.status),
+    rawStatus: String(item.status || 'ACTIVE').toUpperCase(),
+  }
+}
 
 export default function User() {
   const [users, setUsers] = useState([])
+  const [accessList, setAccessList] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [loading, setLoading] = useState(true)
@@ -88,7 +92,7 @@ export default function User() {
     try {
       setLoading(true)
       const response = await apiClient.get('/user')
-      setUsers((response.data?.data || []).map(mapUser))
+      setUsers((response.data?.data || []).map(item => mapUser(item, accessList)))
       setError('')
     } catch (err) {
       setError('Unable to load user records at the moment.')
@@ -97,9 +101,25 @@ export default function User() {
     }
   }
 
+  const loadAccessList = async () => {
+    try {
+      const response = await apiClient.get('/access')
+      setAccessList(response.data?.data || [])
+    } catch (err) {
+      console.error('Error loading access list:', err)
+    }
+  }
+
   useEffect(() => {
     loadUsers()
+    loadAccessList()
   }, [])
+
+  useEffect(() => {
+    if (accessList.length > 0) {
+      loadUsers()
+    }
+  }, [accessList])
 
   const handleSaveUser = async (e) => {
     e.preventDefault()
@@ -206,9 +226,9 @@ export default function User() {
       render: (row) => <div className="text-gray-600">{row.username}</div>,
     },
     {
-      header: 'Access Level',
-      key: 'accessLevel',
-      render: (row) => <div className="font-semibold text-gray-600">{row.accessLevel}</div>,
+      header: 'Access',
+      key: 'accessName',
+      render: (row) => <div className="font-semibold text-gray-600">{row.accessName}</div>,
     },
     {
       header: 'Status',
@@ -422,13 +442,18 @@ export default function User() {
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
               Access Level
             </label>
-            <input
+            <select
               required
-              type="number"
               value={form.access_id}
               onChange={(e) => setForm((prev) => ({ ...prev, access_id: e.target.value }))}
               className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-            />
+            >
+              {accessList.map((access) => (
+                <option key={access.access_id || access.id} value={access.access_id || access.id}>
+                  {access.name || access.access_name}
+                </option>
+              ))}
+            </select>
           </div>
           {editingUser ? (
             <div>
