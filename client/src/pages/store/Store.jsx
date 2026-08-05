@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Edit } from 'lucide-react'
+import { Edit, Download, Upload } from 'lucide-react'
 import Layout from '../components/Layout'
 import DynamicTable from '../components/DynamicTable'
 import Modal from '../components/Modal'
@@ -32,6 +32,8 @@ export default function Store() {
   const [toast, setToast] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({
     number: '',
     name: '',
@@ -116,6 +118,66 @@ export default function Store() {
     } catch (err) {
       showToast('error', err?.response?.data?.message || 'Unable to update store record.')
       setError(err?.response?.data?.message || 'Unable to update store record.')
+    }
+  }
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await apiClient.get('/store/download-template', {
+        responseType: 'blob',
+      })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', 'Store_Import_Template.xlsx')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      showToast('success', 'Template downloaded successfully.')
+    } catch (err) {
+      showToast('error', 'Unable to download template.')
+      setError('Unable to download template.')
+    }
+  }
+
+  const handleUploadExcel = async (e) => {
+    e.preventDefault()
+    const fileInput = e.target.elements.file
+    const file = fileInput.files[0]
+
+    if (!file) {
+      showToast('warning', 'Please select a file to upload.')
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      setUploading(true)
+      const response = await apiClient.post('/store/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      const { added, updated, deactivated, unchanged, total_processed } = response.data?.data || {}
+
+      showToast(
+        'success',
+        `Import completed: ${added} added, ${updated} updated, ${deactivated} deactivated, ${unchanged} unchanged.`,
+      )
+
+      await loadStores()
+      setUploadModalOpen(false)
+      fileInput.value = ''
+      setError('')
+    } catch (err) {
+      showToast('error', err?.response?.data?.message || 'Unable to upload stores.')
+      setError(err?.response?.data?.message || 'Unable to upload stores.')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -272,6 +334,20 @@ export default function Store() {
 
           {/* Core Action: Add Store */}
           <div className="flex items-center gap-2 self-start sm:self-center">
+            <button
+              onClick={handleDownloadTemplate}
+              className="inline-flex items-center gap-2 rounded border border-blue-600 bg-blue-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-150 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            >
+              <Download size={16} strokeWidth={2} />
+              Download Template
+            </button>
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded border border-emerald-600 bg-emerald-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-150 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+            >
+              <Upload size={16} strokeWidth={2} />
+              Upload Excel
+            </button>
             <button
               onClick={() => setModalOpen(true)}
               className="inline-flex items-center gap-2 rounded bg-black px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-150 hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-red-600"
@@ -484,6 +560,42 @@ export default function Store() {
             </div>
           </form>
         ) : null}
+      </Modal>
+      <Modal open={uploadModalOpen} title="Upload Store Excel" onClose={() => setUploadModalOpen(false)}>
+        <form className="space-y-4" onSubmit={handleUploadExcel}>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Excel File
+            </label>
+            <input
+              type="file"
+              name="file"
+              accept=".xlsx,.xls"
+              required
+              className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-[10px] text-gray-500">
+              Upload an Excel file with columns: STORE NO, STORE NAME, REGION, CITY PROVINCE, STATUS
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setUploadModalOpen(false)}
+              disabled={uploading}
+              className="rounded border border-gray-200 px-3 py-2 text-sm disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={uploading}
+              className="rounded bg-black px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {uploading ? 'Uploading...' : 'Upload'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </Layout>
   )
