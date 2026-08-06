@@ -68,6 +68,15 @@
  * @property {'mu_status'} status
  */
 
+/**
+ * @typedef {Object} PartsCols
+ * @property {'mp_id'} id
+ * @property {'mp_name'} name
+ * @property {'mp_description'} description
+ * @property {'mp_price'} price
+ * @property {'mp_status'} status
+ */
+
 const Master = {
   Access: {
     table: 'master_access',
@@ -176,6 +185,21 @@ const Master = {
     },
     select: ['mu_id', 'mu_employee_id', 'mu_fullname', 'mu_username', 'mu_password', 'mu_access_id', 'mu_status'],
     insert: ['mu_employee_id', 'mu_fullname', 'mu_username', 'mu_password', 'mu_access_id', 'mu_status'],
+  },
+  Parts: {
+    table: 'master_parts',
+    pk: 'mp_id',
+    prefix: 'mp',
+    /** @type {PartsCols} */
+    cols: {
+      id: 'mp_id',
+      name: 'mp_name',
+      description: 'mp_description',
+      price: 'mp_price',
+      status: 'mp_status',
+    },
+    select: ['mp_id', 'mp_name', 'mp_description', 'mp_price', 'mp_status'],
+    insert: ['mp_name', 'mp_description', 'mp_price', 'mp_status'],
   },
 };
 

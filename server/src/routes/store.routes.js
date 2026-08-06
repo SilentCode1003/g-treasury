@@ -1,6 +1,6 @@
 const express = require('express')
 const multer = require('multer')
-const { getStores, createStore, updateStore, downloadTemplate, uploadStores } = require('../controllers/store.controller')
+const { getStores, createStore, updateStore, downloadTemplate, uploadStores, getUniqueCities } = require('../controllers/store.controller')
 
 const storeRouter = express.Router()
 
@@ -12,11 +12,13 @@ const upload = multer({
   },
 })
 
+// Define specific routes before parameterized routes
 storeRouter.get('/', getStores)
-storeRouter.post('/', createStore)
-storeRouter.put('/:id', updateStore)
 storeRouter.get('/download-template', downloadTemplate)
+storeRouter.get('/unique-cities', getUniqueCities)
+storeRouter.post('/', createStore)
 storeRouter.post('/upload', upload.single('file'), uploadStores)
+storeRouter.put('/:id', updateStore)
 
 module.exports = {
   storeRouter,

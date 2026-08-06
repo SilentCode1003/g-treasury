@@ -13,6 +13,8 @@ const Statement = {
       'vat',
       'total',
       'prepared_by',
+      'statement_type',
+      'maintenance_format',
     ],
     selectColumns: [
       'soa_id',
@@ -25,6 +27,8 @@ const Statement = {
       'soa_vat',
       'soa_total',
       'soa_prepared_by',
+      'soa_statement_type',
+      'soa_maintenance_format',
     ],
     selectOptionColumns: {
       id: 'soa_id',
@@ -37,6 +41,8 @@ const Statement = {
       vat: 'soa_vat',
       total: 'soa_total',
       prepared_by: 'soa_prepared_by',
+      statement_type: 'soa_statement_type',
+      maintenance_format: 'soa_maintenance_format',
     },
     updateOptionColumns: {
       id: 'id',
@@ -49,6 +55,8 @@ const Statement = {
       vat: 'vat',
       total: 'total',
       prepared_by: 'prepared_by',
+      statement_type: 'statement_type',
+      maintenance_format: 'maintenance_format',
     },
     selectDateFormatColumns: {},
     selectMiscColumns: {},
@@ -63,6 +71,8 @@ const Statement = {
       vat: 'DECIMAL',
       total: 'DECIMAL',
       prepared_by: 'STRING',
+      statement_type: 'ENUM',
+      maintenance_format: 'ENUM',
     },
   },
   statement_items: {

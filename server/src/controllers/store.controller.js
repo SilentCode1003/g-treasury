@@ -386,10 +386,79 @@ const uploadStores = async (req, res, next) => {
   }
 }
 
+const getUniqueCities = async (req, res, next) => {
+  try {
+    console.log('=== getUniqueCities called ===')
+    const { search } = req.query
+    
+    // First, let's try a simple query to get all stores
+    const { sql: testQuery, bindings: testBindings } = sql
+      .select([
+        { col: Master.master_store.selectOptionColumns.id, as: 'id' },
+        { col: Master.master_store.selectOptionColumns.city_province, as: 'city_province' },
+      ])
+      .from(Master.master_store.tablename)
+      .limit(5)
+      .build()
+
+    console.log('Test Query:', testQuery)
+    const testResult = await Query(testQuery, testBindings)
+    console.log('Test result (first 5 stores):', testResult)
+
+    // Now get all cities with optional search filter
+    let queryBuilder = sql
+      .select([
+        { col: Master.master_store.selectOptionColumns.city_province, as: 'city_province' },
+      ])
+      .from(Master.master_store.tablename)
+    
+    if (search && search.trim() !== '') {
+      queryBuilder = queryBuilder.whereLike(
+        Master.master_store.selectOptionColumns.city_province,
+        `%${search}%`
+      )
+    }
+    
+    const { sql: query, bindings } = queryBuilder
+      .orderBy(Master.master_store.selectOptionColumns.city_province, 'ASC')
+      .build()
+
+    console.log('Cities Query:', query)
+    console.log('Bindings:', bindings)
+
+    const cities = await Query(query, bindings)
+    console.log('Raw cities from DB:', cities)
+    console.log('Number of cities returned:', cities.length)
+
+    // Extract unique cities, filtering out null/empty values
+    const uniqueCities = [...new Set(cities.map((c) => c.city_province).filter((c) => c && c.trim() !== ''))]
+    console.log('Unique cities:', uniqueCities)
+    console.log('Number of unique cities:', uniqueCities.length)
+
+    return res.status(200).json({
+      success: true,
+      message: 'Unique cities/provinces retrieved successfully',
+      data: uniqueCities,
+      count: uniqueCities.length,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    console.error('=== Error fetching unique cities ===')
+    console.error('Error:', error)
+    console.error('Error stack:', error.stack)
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching unique cities',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    })
+  }
+}
+
 module.exports = {
   getStores,
   createStore,
   updateStore,
   downloadTemplate,
   uploadStores,
+  getUniqueCities,
 }

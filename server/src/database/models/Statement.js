@@ -14,6 +14,8 @@
  * @property {'soa_vat'} vat
  * @property {'soa_total'} total
  * @property {'soa_prepared_by'} prepared_by
+ * @property {'soa_maintenance_format'} maintenance_format
+ * @property {'soa_statement_type'} statement_type
  */
 
 /**
@@ -49,9 +51,11 @@ const Statement = {
       vat: 'soa_vat',
       total: 'soa_total',
       prepared_by: 'soa_prepared_by',
+      maintenance_format: 'soa_maintenance_format',
+      statement_type: 'soa_statement_type',
     },
-    select: ['soa_id', 'soa_company_from', 'soa_company_to', 'soa_date', 'soa_title', 'soa_headers', 'soa_sub_total', 'soa_vat', 'soa_total', 'soa_prepared_by'],
-    insert: ['soa_company_from', 'soa_company_to', 'soa_date', 'soa_title', 'soa_headers', 'soa_sub_total', 'soa_vat', 'soa_total', 'soa_prepared_by'],
+    select: ['soa_id', 'soa_company_from', 'soa_company_to', 'soa_date', 'soa_title', 'soa_headers', 'soa_sub_total', 'soa_vat', 'soa_total', 'soa_prepared_by', 'soa_maintenance_format', 'soa_statement_type'],
+    insert: ['soa_company_from', 'soa_company_to', 'soa_date', 'soa_title', 'soa_headers', 'soa_sub_total', 'soa_vat', 'soa_total', 'soa_prepared_by', 'soa_maintenance_format', 'soa_statement_type'],
   },
   Activity: {
     table: 'statement_activity',

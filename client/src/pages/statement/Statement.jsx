@@ -7,32 +7,6 @@ import Modal from '../components/Modal'
 import DynamicToast from '../components/DynamicToast'
 import { apiClient } from '../../api/axios'
 
-const MONTH_OPTIONS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-]
-
-const formatMonthLabel = (value) => {
-  if (!value) return ''
-
-  const [month, year] = value.split('-')
-  if (!month || !year) return value
-
-  const monthIndex = Number(month) - 1
-  const monthName = MONTH_OPTIONS[monthIndex] || month
-  return `${monthName} ${year}`
-}
-
 const formatCurrency = (value) =>
   Number(value || 0).toLocaleString('en-PH', {
     style: 'currency',
@@ -171,8 +145,6 @@ export default function Statement() {
     company_from: '',
     company_to: '',
     date: '',
-    date_month: '',
-    date_year: '',
     services: [],
     title: '',
     sub_total: '',
@@ -180,6 +152,8 @@ export default function Statement() {
     total: '',
     includeDrNo: true,
     includeRtNo: true,
+    statement_type: 'SERVICE',
+    maintenance_format: 'REGIONAL_SUMMARY',
   })
   const [editForm, setEditForm] = useState(null)
   const navigate = useNavigate()
@@ -226,14 +200,13 @@ export default function Statement() {
 
   useEffect(() => {
     const currentDate = new Date()
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0')
     const year = currentDate.getFullYear()
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0')
+    const day = String(currentDate.getDate()).padStart(2, '0')
 
     setForm((prev) => ({
       ...prev,
-      date: `${month}-${year}`,
-      date_month: month,
-      date_year: String(year),
+      date: `${year}-${month}-${day}`,
     }))
 
     loadCompanies()
@@ -242,8 +215,6 @@ export default function Statement() {
   }, [])
 
   const handleEditClick = (row) => {
-    const [month, year] = String(row.date || '').split('-')
-
     const normalizedRowHeaders = normalizeStoredHeaders(row.headers ?? null)
     const normalizeHeaderKey = (header = '') =>
       String(header ?? '')
@@ -258,13 +229,13 @@ export default function Statement() {
       company_from: String(row.company_from || ''),
       company_to: String(row.company_to || ''),
       date: row.date || '',
-      date_month: month || '',
-      date_year: year || '',
       title: row.title || '',
       services: getServiceIdsFromTitle(row.title || '', services),
       existingHeaders: row.headers ?? null,
       includeDrNo: hasDrNo,
       includeRtNo: hasRtNo,
+      statement_type: row.statement_type || 'SERVICE',
+      maintenance_format: row.maintenance_format || 'REGIONAL_SUMMARY',
     })
     setEditModalOpen(true)
   }
@@ -272,20 +243,41 @@ export default function Statement() {
   const handleAddStatement = async (e) => {
     e.preventDefault()
     try {
-      const headers = buildHeadersFromServices(form.services, services, [], {
-        includeDrNo: form.includeDrNo,
-        includeRtNo: form.includeRtNo,
-      })
+      let headers = []
+      let title = form.title
+      
+      if (form.statement_type === 'SERVICE') {
+        headers = buildHeadersFromServices(form.services, services, [], {
+          includeDrNo: form.includeDrNo,
+          includeRtNo: form.includeRtNo,
+        })
+        title = form.title || generatedTitle
+      } else {
+        // Maintenance headers based on format
+        if (form.maintenance_format === 'REGIONAL_SUMMARY') {
+          headers = ['AREA', 'NO OF STORE', 'PRICE PER STORE', 'TOTAL AMOUNT', 'SERVICE TYPE', 'WORK DONE']
+          title = form.title || 'CCTV MAINTENANCE BILLING - REGIONAL SUMMARY'
+        } else if (form.maintenance_format === 'ITEMIZED_PARTS') {
+          headers = ['INVOICE', 'STORE NUMBER', 'STORE NAME', 'TICKET NUMBER', 'DESCRIPTION', 'SERVICES DATE', 'WORK DONE', 'PARTS DESCRIPTION', 'PARTS QTY.', 'PRICE', 'SUBTOTAL', 'TOTAL INVOICE AMOUNT']
+          title = form.title || 'CCTV MAINTENANCE BILLING - ITEMIZED PARTS'
+        } else if (form.maintenance_format === 'OFFICIAL_INVOICE') {
+          headers = ['NO', 'INVOICE', 'SERVICE DATE', 'AREA', 'SERVICE TYPE', 'WORK DONE', 'NO OF STORE', 'AMOUNT PER STORE', 'TOTAL VAT-EX', 'TOTAL VAT-IN']
+          title = form.title || 'CCTV MAINTENANCE BILLING - OFFICIAL INVOICE'
+        }
+      }
+      
       const payload = {
         company_from: Number(form.company_from),
         company_to: Number(form.company_to),
         date: form.date,
-        services: form.services,
-        title: form.title || generatedTitle,
+        services: form.statement_type === 'SERVICE' ? form.services : [],
+        title: title,
         headers: JSON.stringify(headers),
         sub_total: form.sub_total === '' ? null : Number(form.sub_total),
         vat: form.vat === '' ? null : Number(form.vat),
         total: form.total === '' ? null : Number(form.total),
+        statement_type: form.statement_type,
+        maintenance_format: form.maintenance_format,
       }
       const response = await apiClient.post('/statement', payload)
       showToast('success', response.data?.message || 'Statement created successfully.')
@@ -295,14 +287,13 @@ export default function Statement() {
       setStatements((prev) => [mapStatement(createdStatement), ...prev])
       setModalOpen(false)
       const currentDate = new Date()
-      const month = String(currentDate.getMonth() + 1).padStart(2, '0')
       const year = currentDate.getFullYear()
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0')
+      const day = String(currentDate.getDate()).padStart(2, '0')
       setForm({
         company_from: '',
         company_to: '',
-        date: `${month}-${year}`,
-        date_month: month,
-        date_year: String(year),
+        date: `${year}-${month}-${day}`,
         services: [],
         title: '',
         sub_total: '',
@@ -310,6 +301,8 @@ export default function Statement() {
         total: '',
         includeDrNo: true,
         includeRtNo: true,
+        statement_type: 'SERVICE',
+        maintenance_format: 'REGIONAL_SUMMARY',
       })
       setError('')
       if (createdId) {
@@ -328,21 +321,42 @@ export default function Statement() {
     e.preventDefault()
     if (!editForm?.id) return
     try {
-      const headers = buildHeadersFromServices(
-        editForm.services || [],
-        services,
-        editForm.existingHeaders ?? editForm.headers ?? null,
-        {
-          includeDrNo: editForm.includeDrNo,
-          includeRtNo: editForm.includeRtNo,
-        },
-      )
+      let headers = []
+      let title = editForm.title
+      
+      if (editForm.statement_type === 'SERVICE') {
+        headers = buildHeadersFromServices(
+          editForm.services || [],
+          services,
+          editForm.existingHeaders ?? editForm.headers ?? null,
+          {
+            includeDrNo: editForm.includeDrNo,
+            includeRtNo: editForm.includeRtNo,
+          },
+        )
+        title = editForm.title || buildGeneratedTitle(editForm.services || [], services)
+      } else {
+        // Maintenance headers based on format
+        if (editForm.maintenance_format === 'REGIONAL_SUMMARY') {
+          headers = ['AREA', 'NO OF STORE', 'PRICE PER STORE', 'TOTAL AMOUNT', 'SERVICE TYPE', 'WORK DONE']
+          title = editForm.title || 'CCTV MAINTENANCE BILLING - REGIONAL SUMMARY'
+        } else if (editForm.maintenance_format === 'ITEMIZED_PARTS') {
+          headers = ['INVOICE', 'STORE NUMBER', 'STORE NAME', 'TICKET NUMBER', 'DESCRIPTION', 'SERVICES DATE', 'WORK DONE', 'PARTS DESCRIPTION', 'PARTS QTY.', 'PRICE', 'SUBTOTAL', 'TOTAL INVOICE AMOUNT']
+          title = editForm.title || 'CCTV MAINTENANCE BILLING - ITEMIZED PARTS'
+        } else if (editForm.maintenance_format === 'OFFICIAL_INVOICE') {
+          headers = ['NO', 'INVOICE', 'SERVICE DATE', 'AREA', 'SERVICE TYPE', 'WORK DONE', 'NO OF STORE', 'AMOUNT PER STORE', 'TOTAL VAT-EX', 'TOTAL VAT-IN']
+          title = editForm.title || 'CCTV MAINTENANCE BILLING - OFFICIAL INVOICE'
+        }
+      }
+      
       const payload = {
         company_from: Number(editForm.company_from),
         company_to: Number(editForm.company_to),
         date: editForm.date,
-        title: editForm.title || buildGeneratedTitle(editForm.services || [], services),
+        title: title,
         headers: JSON.stringify(headers),
+        statement_type: editForm.statement_type,
+        maintenance_format: editForm.maintenance_format,
       }
       const response = await apiClient.put(`/statement/${editForm.id}`, payload)
       showToast('success', response.data?.message || 'Statement updated successfully.')
@@ -632,53 +646,31 @@ export default function Statement() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Statement Month
+              Statement Date
             </label>
-            <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
-              <select
-                required
-                value={form.date_month}
-                onChange={(e) => {
-                  const month = e.target.value
-                  const year = form.date_year || new Date().getFullYear()
-                  setForm((prev) => ({
-                    ...prev,
-                    date_month: month,
-                    date: `${month}-${year}`,
-                    date_year: String(year),
-                  }))
-                }}
-                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-              >
-                <option value="">Select month</option>
-                {MONTH_OPTIONS.map((month, index) => {
-                  const value = String(index + 1).padStart(2, '0')
-                  return (
-                    <option key={value} value={value}>
-                      {month}
-                    </option>
-                  )
-                })}
-              </select>
-              <input
-                required
-                type="number"
-                min="2000"
-                value={form.date_year}
-                onChange={(e) => {
-                  const year = e.target.value
-                  const month =
-                    form.date_month || String(new Date().getMonth() + 1).padStart(2, '0')
-                  setForm((prev) => ({ ...prev, date_year: year, date: `${month}-${year}` }))
-                }}
-                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                placeholder="Year"
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              {formatMonthLabel(form.date) || 'Choose a month and year for the statement.'}
-            </p>
+            <input
+              required
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+              className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+            />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Statement Type
+            </label>
+            <select
+              required
+              value={form.statement_type}
+              onChange={(e) => setForm((prev) => ({ ...prev, statement_type: e.target.value }))}
+              className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="SERVICE">Service</option>
+              <option value="MAINTENANCE">Maintenance</option>
+            </select>
+          </div>
+          {form.statement_type === 'SERVICE' && (
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
               Services
@@ -715,6 +707,8 @@ export default function Statement() {
               )}
             </div>
           </div>
+          )}
+          {form.statement_type === 'SERVICE' && (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 text-sm">
               <input
@@ -733,6 +727,8 @@ export default function Statement() {
               <span className="text-sm text-gray-700">Include RT NO.</span>
             </label>
           </div>
+          )}
+          {form.statement_type === 'SERVICE' && (
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
               Title
@@ -749,6 +745,42 @@ export default function Statement() {
               placeholder="Enter statement title"
             />
           </div>
+          )}
+          {form.statement_type === 'MAINTENANCE' && (
+          <>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Maintenance Format
+            </label>
+            <select
+              required
+              value={form.maintenance_format}
+              onChange={(e) => setForm((prev) => ({ ...prev, maintenance_format: e.target.value }))}
+              className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="REGIONAL_SUMMARY">Regional Summary (Area-based)</option>
+              <option value="ITEMIZED_PARTS">Itemized Parts & Repair</option>
+              <option value="OFFICIAL_INVOICE">Official Invoice</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Title
+            </label>
+            <input
+              value={form.title}
+              onChange={(e) => {
+                setForm((prev) => ({
+                  ...prev,
+                  title: e.target.value,
+                }))
+              }}
+              className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+              placeholder="Enter statement title"
+            />
+          </div>
+          </>
+          )}
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -811,53 +843,31 @@ export default function Statement() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Statement Month
+                Statement Date
               </label>
-              <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
-                <select
-                  required
-                  value={editForm.date_month}
-                  onChange={(e) => {
-                    const month = e.target.value
-                    const year = editForm.date_year || new Date().getFullYear()
-                    setEditForm((prev) => ({
-                      ...prev,
-                      date_month: month,
-                      date: `${month}-${year}`,
-                      date_year: String(year),
-                    }))
-                  }}
-                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                >
-                  <option value="">Select month</option>
-                  {MONTH_OPTIONS.map((month, index) => {
-                    const value = String(index + 1).padStart(2, '0')
-                    return (
-                      <option key={value} value={value}>
-                        {month}
-                      </option>
-                    )
-                  })}
-                </select>
-                <input
-                  required
-                  type="number"
-                  min="2000"
-                  value={editForm.date_year}
-                  onChange={(e) => {
-                    const year = e.target.value
-                    const month =
-                      editForm.date_month || String(new Date().getMonth() + 1).padStart(2, '0')
-                    setEditForm((prev) => ({ ...prev, date_year: year, date: `${month}-${year}` }))
-                  }}
-                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                  placeholder="Year"
-                />
-              </div>
-              <p className="mt-1 text-[11px] text-gray-500">
-                {formatMonthLabel(editForm.date) || 'Choose a month and year for the statement.'}
-              </p>
+              <input
+                required
+                type="date"
+                value={editForm.date}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, date: e.target.value }))}
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+              />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Statement Type
+              </label>
+              <select
+                required
+                value={editForm.statement_type}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, statement_type: e.target.value }))}
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+              >
+                <option value="SERVICE">Service</option>
+                <option value="MAINTENANCE">Maintenance</option>
+              </select>
+            </div>
+            {editForm.statement_type === 'SERVICE' && (
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
                 Services
@@ -897,14 +907,14 @@ export default function Statement() {
                 )}
               </div>
             </div>
+            )}
+            {editForm.statement_type === 'SERVICE' && (
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 text-sm">
                 <input
                   type="checkbox"
                   checked={editForm.includeDrNo}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({ ...prev, includeDrNo: e.target.checked }))
-                  }
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, includeDrNo: e.target.checked }))}
                 />
                 <span className="text-sm text-gray-700">Include DR NO.</span>
               </label>
@@ -912,25 +922,41 @@ export default function Statement() {
                 <input
                   type="checkbox"
                   checked={editForm.includeRtNo}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({ ...prev, includeRtNo: e.target.checked }))
-                  }
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, includeRtNo: e.target.checked }))}
                 />
                 <span className="text-sm text-gray-700">Include RT NO.</span>
               </label>
+            </div>
+            )}
+            {editForm.statement_type === 'MAINTENANCE' && (
+            <>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Maintenance Format
+              </label>
+              <select
+                required
+                value={editForm.maintenance_format}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, maintenance_format: e.target.value }))}
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+              >
+                <option value="REGIONAL_SUMMARY">Regional Summary (Area-based)</option>
+                <option value="ITEMIZED_PARTS">Itemized Parts & Repair</option>
+                <option value="OFFICIAL_INVOICE">Official Invoice</option>
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
                 Title
               </label>
               <input
-                required
-                value={editForm.title || editGeneratedTitle}
+                value={editForm.title}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
                 className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                placeholder="Enter statement title"
               />
             </div>
+            </>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 type="button"

@@ -9,6 +9,7 @@ const { userRouter } = require('../routes/user.routes')
 const { routeAccessRouter } = require('../routes/route_access.routes')
 const { credentialsRouter } = require('../routes/credentials.routes')
 const { statementRouter } = require('../routes/statement.routes')
+const { partsRouter } = require('../routes/parts.routes')
 const { EncryptString } = require('../utilities/cryptography.util')
 console.log('Encrypted', EncryptString('admin'))
 const initRoutes = (app) => {
@@ -22,6 +23,7 @@ const initRoutes = (app) => {
   app.use('/user', userRouter)
   app.use('/route-access', routeAccessRouter)
   app.use('/statement', statementRouter)
+  app.use('/parts', partsRouter)
   //app.use(auth)
 }
 

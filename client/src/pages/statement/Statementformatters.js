@@ -27,6 +27,20 @@ export const formatMonthLabel = (value) => {
   return `${MONTH_OPTIONS[monthIndex] || month} ${year}`
 }
 
+export const formatDateLabel = (value) => {
+  if (!value) return ''
+  // Handle YYYY-MM-DD format
+  const parts = value.split('-')
+  if (parts.length === 3) {
+    const [year, month, day] = parts
+    const monthIndex = Number(month) - 1
+    const monthName = MONTH_OPTIONS[monthIndex] || month
+    return `${monthName} ${Number(day)}, ${year}`
+  }
+  // Fallback to old MM-YYYY format
+  return formatMonthLabel(value)
+}
+
 export const formatCurrency = (value) =>
   // Aligned with localization standard
   Number(value || 0).toLocaleString('en-PH', {

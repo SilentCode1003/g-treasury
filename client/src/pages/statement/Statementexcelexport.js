@@ -1,5 +1,5 @@
 import XLSX from 'xlsx-js-style'
-import { formatDecimalValue, buildContactLine, getExportCellValue } from './Statementformatters'
+import { formatDecimalValue, buildContactLine, getExportCellValue, formatDateLabel } from './Statementformatters'
 
 // Builds and downloads an .xlsx replica matching the PDF style:
 // Centered grid columns, visible black borders, and clean layout structures.
@@ -61,7 +61,7 @@ export const exportStatementToExcel = ({ columns, rows, documentMeta = {}, state
       s: { font: fontBold, alignment: { horizontal: 'right' } },
     }
     ws_data[toRowIndex][colCount - 1] = {
-      v: documentMeta.date || '',
+      v: formatDateLabel(documentMeta.date) || documentMeta.date || '',
       t: 's',
       s: { font: fontNormal },
     }

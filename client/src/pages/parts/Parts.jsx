@@ -13,17 +13,24 @@ const formatStatus = (value) => {
   return 'Active'
 }
 
-const mapAccess = (item) => ({
-  id: item.access_id ?? item.id,
-  name: item.name || item.access_name || 'Untitled access',
-  description: item.description || 'System access role',
+const formatCurrency = (value) =>
+  Number(value || 0).toLocaleString('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+const mapPart = (item) => ({
+  id: item.part_id ?? item.id,
+  name: item.name || 'Untitled part',
+  description: item.description || '—',
+  price: Number(item.price || 0),
   status: formatStatus(item.status),
 })
 
-export default function Access() {
-  const [access, setAccess] = useState([])
-  const [routeAccess, setRouteAccess] = useState([])
-  const [checkedRoutes, setCheckedRoutes] = useState(new Set())
+export default function Parts() {
+  const [parts, setParts] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [loading, setLoading] = useState(true)
@@ -31,178 +38,104 @@ export default function Access() {
   const [toast, setToast] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [form, setForm] = useState({ access_name: '', description: '' })
+  const [form, setForm] = useState({ name: '', description: '', price: '' })
   const [editForm, setEditForm] = useState(null)
-  const [selectedAccessId, setSelectedAccessId] = useState(null)
 
   const handleNavigate = () => {}
 
   const showToast = (type, message) => setToast({ type, message })
 
-  const loadAccess = async () => {
+  const loadParts = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.get('/access')
-      setAccess((response.data?.data || []).map(mapAccess))
+      const response = await apiClient.get('/parts')
+      setParts((response.data?.data || []).map(mapPart))
       setError('')
     } catch (err) {
-      setError('Unable to load access records at the moment.')
+      setError('Unable to load part records at the moment.')
     } finally {
       setLoading(false)
     }
   }
 
-  const loadRouteAccess = async (accessId) => {
-    try {
-      const response = await apiClient.get(`/route-access/access/${accessId}`)
-      const mappedData = (response.data?.data || []).map((item) => ({
-        id: item.route_access_id,
-        name: item.name,
-        status: item.status,
-      }))
-      setRouteAccess(mappedData)
-    } catch (err) {
-      console.error('Error loading route access:', err)
-      setRouteAccess([])
-    }
-  }
-
   useEffect(() => {
-    loadAccess()
+    loadParts()
   }, [])
 
-  const handleAddAccess = async (e) => {
+  const handleAddPart = async (e) => {
     e.preventDefault()
     try {
       const payload = {
-        access_name: form.access_name,
+        name: form.name,
         description: form.description,
+        price: form.price === '' ? null : Number(form.price),
         status: 'ACTIVE',
       }
-      const response = await apiClient.post('/access', payload)
-      const newAccess = response.data?.data || payload
-      const accessId = newAccess.access_id || newAccess.id
-
-      // Create default route access for the new access role
-      const defaultRoutes = [
-        'dashboard',
-        'company',
-        'department',
-        'service',
-        'store',
-        'parts',
-        'user',
-        'access',
-        'statement',
-      ]
-
-      await Promise.all(
-        defaultRoutes.map((route) =>
-          apiClient.post('/route-access', {
-            access_id: accessId,
-            name: route,
-            status: 'Full Access',
-          })
-        )
-      )
-
-      showToast('success', response.data?.message || 'Access created successfully.')
-      setAccess((prev) => [mapAccess(newAccess), ...prev])
+      const response = await apiClient.post('/parts', payload)
+      showToast('success', response.data?.message || 'Part created successfully.')
+      setParts((prev) => [mapPart(response.data?.data || payload), ...prev])
       setModalOpen(false)
-      setForm({ access_name: '', description: '' })
+      setForm({ name: '', description: '', price: '' })
       setError('')
     } catch (err) {
-      showToast('error', err?.response?.data?.message || 'Unable to create access record.')
-      setError(err?.response?.data?.message || 'Unable to create access record.')
+      showToast('error', err?.response?.data?.message || 'Unable to create part record.')
+      setError(err?.response?.data?.message || 'Unable to create part record.')
     }
   }
 
   const handleEditClick = (row) => {
     setEditForm({
       id: row.id,
-      access_name: row.name || '',
+      name: row.name || '',
       description: row.description || '',
+      price: row.price || '',
       status: row.status?.toUpperCase() || 'ACTIVE',
     })
     setEditModalOpen(true)
   }
 
-  const handleRowClick = (row) => {
-    setSelectedAccessId(row.id)
-    loadRouteAccess(row.id)
-    setCheckedRoutes(new Set())
-  }
-
-  const handleCheckboxChange = (routeId) => {
-    const newChecked = new Set(checkedRoutes)
-    if (newChecked.has(routeId)) {
-      newChecked.delete(routeId)
-    } else {
-      newChecked.add(routeId)
-    }
-    setCheckedRoutes(newChecked)
-  }
-
-  const handleBulkStatusChange = async (newStatus) => {
-    if (!newStatus || checkedRoutes.size === 0) return
-
-    try {
-      const routeIds = Array.from(checkedRoutes)
-      await Promise.all(
-        routeIds.map((routeId) => apiClient.put(`/route-access/${routeId}`, { status: newStatus }))
-      )
-      setRouteAccess((prev) =>
-        prev.map((route) => (checkedRoutes.has(route.id) ? { ...route, status: newStatus } : route))
-      )
-      setCheckedRoutes(new Set())
-      showToast('success', `${routeIds.length} route(s) updated successfully`)
-    } catch (err) {
-      showToast('error', 'Failed to update route status')
-    }
-  }
-
-  const handleUpdateAccess = async (e) => {
+  const handleUpdatePart = async (e) => {
     e.preventDefault()
     if (!editForm || !editForm.id) return
 
     try {
       const payload = {
-        access_name: editForm.access_name,
+        name: editForm.name,
         description: editForm.description,
+        price: editForm.price === '' ? null : Number(editForm.price),
         status: editForm.status,
       }
-      const response = await apiClient.put(`/access/${editForm.id}`, payload)
-      showToast('success', response.data?.message || 'Access updated successfully.')
-      const updated = mapAccess(
-        response.data?.data || { access_id: editForm.id, ...payload },
-      )
-      setAccess((prev) => prev.map((acc) => (acc.id === editForm.id ? updated : acc)))
+      const response = await apiClient.put(`/parts/${editForm.id}`, payload)
+      showToast('success', response.data?.message || 'Part updated successfully.')
+      const updated = mapPart(response.data?.data || { part_id: editForm.id, ...payload })
+      setParts((prev) => prev.map((part) => (part.id === editForm.id ? updated : part)))
       setEditModalOpen(false)
       setEditForm(null)
       setError('')
     } catch (err) {
-      showToast('error', err?.response?.data?.message || 'Unable to update access record.')
-      setError(err?.response?.data?.message || 'Unable to update access record.')
+      showToast('error', err?.response?.data?.message || 'Unable to update part record.')
+      setError(err?.response?.data?.message || 'Unable to update part record.')
     }
   }
 
-  const filteredAccess = useMemo(() => {
-    return access.filter((acc) => {
+  const filteredParts = useMemo(() => {
+    return parts.filter((part) => {
       const matchesSearch =
-        acc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(acc.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
-        acc.description.toLowerCase().includes(searchQuery.toLowerCase())
+        part.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(part.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        part.description.toLowerCase().includes(searchQuery.toLowerCase())
 
-      const matchesFilter = statusFilter === 'All' || acc.status === statusFilter
+      const matchesFilter = statusFilter === 'All' || part.status === statusFilter
 
       return matchesSearch && matchesFilter
     })
-  }, [access, searchQuery, statusFilter])
+  }, [parts, searchQuery, statusFilter])
 
   const metrics = useMemo(() => {
-    const total = filteredAccess.length
-    return { total }
-  }, [filteredAccess])
+    const total = filteredParts.length
+    const totalValue = filteredParts.reduce((acc, curr) => acc + curr.price, 0)
+    return { total, totalValue }
+  }, [filteredParts])
 
   const columns = [
     {
@@ -213,14 +146,19 @@ export default function Access() {
       ),
     },
     {
-      header: 'Access Name',
+      header: 'Name',
       key: 'name',
       render: (row) => <div className="font-bold text-black">{row.name}</div>,
     },
     {
       header: 'Description',
       key: 'description',
-      render: (row) => <div className="font-semibold text-gray-600">{row.description}</div>,
+      render: (row) => <div className="text-neutral-500">{row.description}</div>,
+    },
+    {
+      header: 'Price',
+      key: 'price',
+      render: (row) => <div className="font-semibold text-gray-700">{formatCurrency(row.price)}</div>,
     },
     {
       header: 'Status',
@@ -265,64 +203,10 @@ export default function Access() {
     },
   ]
 
-  const routeAccessColumns = [
-    {
-      header: '',
-      key: 'checkbox',
-      render: (row) => (
-        <input
-          type="checkbox"
-          checked={checkedRoutes.has(row.id)}
-          onChange={() => handleCheckboxChange(row.id)}
-          className="h-4 w-4 rounded border-gray-300"
-        />
-      ),
-    },
-    {
-      header: 'ID',
-      key: 'id',
-      render: (row) => (
-        <div className="font-mono text-[11px] font-bold text-gray-400">{row.id}</div>
-      ),
-    },
-    {
-      header: 'Route Name',
-      key: 'name',
-      render: (row) => <div className="font-bold text-black">{row.name}</div>,
-    },
-    {
-      header: 'Status',
-      key: 'status',
-      render: (row) => (
-        <select
-          value={row.status || 'Full Access'}
-          onChange={(e) => handleRouteStatusChange(row.id, e.target.value)}
-          className="rounded border border-gray-200 px-2 py-1 text-xs"
-        >
-          <option value="Full Access">Full Access</option>
-          <option value="View Only">View Only</option>
-          <option value="No Access">No Access</option>
-        </select>
-      ),
-    },
-  ]
-
-  const handleRouteStatusChange = async (routeId, newStatus) => {
-    try {
-      await apiClient.put(`/route-access/${routeId}`, { status: newStatus })
-      setRouteAccess((prev) =>
-        prev.map((route) => (route.id === routeId ? { ...route, status: newStatus } : route))
-      )
-      showToast('success', 'Route status updated successfully')
-    } catch (err) {
-      showToast('error', 'Failed to update route status')
-    }
-  }
-
   return (
     <Layout
-      activeItem="access"
-      title="Access Control"
+      activeItem="parts"
+      title="Parts Masters"
       user={{ name: 'Administrator', role: 'Admin', initials: 'AD' }}
       onNavigate={handleNavigate}
       notificationCount={3}
@@ -331,7 +215,7 @@ export default function Access() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between lg:shrink-0">
           <div>
             <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-400">
-              <span>Security</span>
+              <span>Masters</span>
               <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -340,9 +224,8 @@ export default function Access() {
                   d="M9 5l7 7-7 7"
                 />
               </svg>
-              <span className="text-red-600">Access Control</span>
+              <span className="text-red-600">Parts</span>
             </div>
-
             <div className="flex items-center gap-3.5">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-black text-white ring-1 ring-neutral-900">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -350,21 +233,18 @@ export default function Access() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth="2"
-                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
                   />
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-bold tracking-tight text-black">
-                  Access Control Management
-                </h2>
+                <h2 className="text-xl font-bold tracking-tight text-black">Parts Directories</h2>
                 <p className="text-xs text-gray-500">
-                  Define user roles, route permissions, and system-wide security protocols.
+                  Manage parts inventory, pricing, and availability status.
                 </p>
               </div>
             </div>
           </div>
-
           <div className="flex items-center gap-2 self-start sm:self-center">
             <button
               onClick={() => setModalOpen(true)}
@@ -378,79 +258,54 @@ export default function Access() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-              Add Access Role
+              Add Part
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-1 lg:shrink-0">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:shrink-0">
           <div className="rounded border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              Total Roles
+              Total Parts
             </p>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-2xl font-black text-black">{metrics.total}</span>
-              <span className="text-[10px] font-medium text-gray-400">defined</span>
+              <span className="text-[10px] font-medium text-gray-400">items</span>
+            </div>
+          </div>
+          <div className="rounded border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Total Value
+            </p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-red-600">{formatCurrency(metrics.totalValue)}</span>
+              <span className="text-[10px] font-medium text-gray-400">inventory value</span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 flex-1 min-h-0">
-          <div className="flex flex-col h-full min-h-0">
-            <DynamicTable
-              data={filteredAccess}
-              searchQuery={searchQuery}
-              statusFilter={statusFilter}
-              searchFields={['name', 'id', 'description']}
-              columns={columns}
-              registryLabel="System Roles"
-              footerLabel="Security Protocol Verification Node Operational"
-              footerMeta="Access Management System Integrated"
-              onRowClick={handleRowClick}
-              selectedRowId={selectedAccessId}
-            />
-          </div>
-          <div className="flex flex-col h-full min-h-0">
-            {checkedRoutes.size > 0 && (
-              <div className="mb-2 flex items-center gap-2 rounded border border-gray-200 bg-white px-4 py-2 shadow-sm">
-                <span className="text-xs font-medium text-gray-700">
-                  {checkedRoutes.size} route(s) selected
-                </span>
-                <select
-                  onChange={(e) => handleBulkStatusChange(e.target.value)}
-                  className="rounded border border-gray-200 px-2 py-1 text-xs"
-                >
-                  <option value="">Change status to...</option>
-                  <option value="Full Access">Full Access</option>
-                  <option value="View Only">View Only</option>
-                  <option value="No Access">No Access</option>
-                </select>
-              </div>
-            )}
-            <DynamicTable
-              data={routeAccess}
-              searchQuery=""
-              statusFilter="All"
-              searchFields={['name', 'id']}
-              columns={routeAccessColumns}
-              registryLabel="Route Privileges"
-              footerLabel="Route Permission Management"
-              footerMeta="Access Control System"
-            />
-          </div>
-        </div>
+        <DynamicTable
+          data={filteredParts}
+          searchQuery={searchQuery}
+          statusFilter={statusFilter}
+          searchFields={['name', 'id', 'description']}
+          columns={columns}
+          registryLabel="Parts Registry"
+          footerLabel="Redline Inventory System Operational"
+          footerMeta="Active Parts Tracking"
+        />
       </div>
-      <Modal open={editModalOpen} title="Edit Access Role" onClose={() => setEditModalOpen(false)}>
+      <Modal open={editModalOpen} title="Edit Part" onClose={() => setEditModalOpen(false)}>
         {editForm ? (
-          <form className="space-y-4" onSubmit={handleUpdateAccess}>
+          <form className="space-y-4" onSubmit={handleUpdatePart}>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Access Name
+                Name
               </label>
               <input
                 required
-                value={editForm.access_name}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, access_name: e.target.value }))}
+                value={editForm.name}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
                 className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
               />
             </div>
@@ -461,6 +316,18 @@ export default function Access() {
               <input
                 value={editForm.description}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Price
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={editForm.price}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
                 className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
               />
             </div>
@@ -508,16 +375,16 @@ export default function Access() {
           {error}
         </div>
       ) : null}
-      <Modal open={modalOpen} title="Add Access Role" onClose={() => setModalOpen(false)}>
-        <form className="space-y-4" onSubmit={handleAddAccess}>
+      <Modal open={modalOpen} title="Add Part" onClose={() => setModalOpen(false)}>
+        <form className="space-y-4" onSubmit={handleAddPart}>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Access Name
+              Name
             </label>
             <input
               required
-              value={form.access_name}
-              onChange={(e) => setForm((prev) => ({ ...prev, access_name: e.target.value }))}
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
             />
           </div>
@@ -528,6 +395,18 @@ export default function Access() {
             <input
               value={form.description}
               onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Price
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={form.price}
+              onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
               className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
             />
           </div>

@@ -32,6 +32,14 @@ const getStatements = async (req, res, next) => {
           col: Statement.statement_of_account.selectOptionColumns.prepared_by,
           as: 'soa_prepared_by',
         },
+        {
+          col: Statement.statement_of_account.selectOptionColumns.statement_type,
+          as: 'soa_statement_type',
+        },
+        {
+          col: Statement.statement_of_account.selectOptionColumns.maintenance_format,
+          as: 'soa_maintenance_format',
+        },
       ])
       .from(Statement.statement_of_account.tablename)
       .build()
@@ -87,6 +95,14 @@ const getStatement = async (req, res, next) => {
           col: Statement.statement_of_account.selectOptionColumns.prepared_by,
           as: 'soa_prepared_by',
         },
+        {
+          col: Statement.statement_of_account.selectOptionColumns.statement_type,
+          as: 'soa_statement_type',
+        },
+        {
+          col: Statement.statement_of_account.selectOptionColumns.maintenance_format,
+          as: 'soa_maintenance_format',
+        },
       ])
       .from(Statement.statement_of_account.tablename)
       .where(Statement.statement_of_account.selectOptionColumns.id, statementId)
@@ -120,7 +136,7 @@ const getStatement = async (req, res, next) => {
 const createStatement = async (req, res, next) => {
   try {
     const payload = buildStatementCreatePayload(req.body, req)
-    const { company_from, company_to, date, title, headers, sub_total, vat, total, prepared_by } =
+    const { company_from, company_to, date, title, headers, sub_total, vat, total, prepared_by, statement_type, maintenance_format } =
       payload
 
     if (!company_from || !company_to || !date || !title) {
@@ -147,6 +163,8 @@ const createStatement = async (req, res, next) => {
           vat: Number(vat || 0),
           total: Number(total || 0),
           prepared_by,
+          statement_type: statement_type || 'SERVICE',
+          maintenance_format: maintenance_format || null,
         },
         { prefix: Statement.statement_of_account.prefix },
       )
@@ -172,6 +190,8 @@ const createStatement = async (req, res, next) => {
         soa_vat: Number(vat || 0),
         soa_total: Number(total || 0),
         soa_prepared_by: prepared_by,
+        soa_statement_type: statement_type || 'SERVICE',
+        soa_maintenance_format: maintenance_format || null,
       },
       timestamp: new Date().toISOString(),
     })
@@ -188,7 +208,7 @@ const createStatement = async (req, res, next) => {
 const updateStatement = async (req, res, next) => {
   try {
     const statementId = Number(req.params.id)
-    const { company_from, company_to, date, title, headers, sub_total, vat, total, prepared_by } =
+    const { company_from, company_to, date, title, headers, sub_total, vat, total, prepared_by, statement_type, maintenance_format } =
       req.body
 
     if (!statementId) {
@@ -204,15 +224,14 @@ const updateStatement = async (req, res, next) => {
     if (date !== undefined) updateData.date = date
     if (title !== undefined) updateData.title = title
     if (headers !== undefined)
-      updateData.headers = headers
-        ? typeof headers === 'string'
-          ? headers
-          : JSON.stringify(headers)
-        : null
-    if (sub_total !== undefined) updateData.sub_total = Number(sub_total)
-    if (vat !== undefined) updateData.vat = Number(vat)
-    if (total !== undefined) updateData.total = Number(total)
+      updateData.headers =
+        typeof headers === 'string' ? headers : JSON.stringify(headers)
+    if (sub_total !== undefined) updateData.sub_total = Number(sub_total || 0)
+    if (vat !== undefined) updateData.vat = Number(vat || 0)
+    if (total !== undefined) updateData.total = Number(total || 0)
     if (prepared_by !== undefined) updateData.prepared_by = prepared_by
+    if (statement_type !== undefined) updateData.statement_type = statement_type
+    if (maintenance_format !== undefined) updateData.maintenance_format = maintenance_format
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({

@@ -42,9 +42,9 @@ export const hasRouteAccess = (routeName, user) => {
     return true
   }
 
-  // Check user's route access
-  const routeAccess = user.routeAccess || []
-  const route = routeAccess.find((r) => r.routeName === routeName)
+  // Check user's route access (could be in 'routes' or 'routeAccess')
+  const routeAccess = user.routes || user.routeAccess || []
+  const route = routeAccess.find((r) => r.name === routeName || r.routeName === routeName)
 
   if (!route) return false
 
@@ -70,6 +70,7 @@ export const getAccessibleRoutes = (user) => {
         'department',
         'service',
         'store',
+        'parts',
         'user',
         'access',
         'statement',

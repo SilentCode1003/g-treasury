@@ -630,6 +630,36 @@ const Master = {
       action: 'STRING',
     },
   },
+  master_parts: {
+    tablename: 'master_parts',
+    prefix: 'mp',
+    prefix_: 'mp_',
+    insertColumns: ['name', 'description', 'price', 'status'],
+    selectColumns: ['mp_id', 'mp_name', 'mp_description', 'mp_price', 'mp_status'],
+    selectOptionColumns: {
+      id: 'mp_id',
+      name: 'mp_name',
+      description: 'mp_description',
+      price: 'mp_price',
+      status: 'mp_status',
+    },
+    updateOptionColumns: {
+      id: 'id',
+      name: 'name',
+      description: 'description',
+      price: 'price',
+      status: 'status',
+    },
+    selectDateFormatColumns: {},
+    selectMiscColumns: {},
+    columnDataTypes: {
+      id: 'INTEGER',
+      name: 'STRING',
+      description: 'TEXT',
+      price: 'DECIMAL',
+      status: 'ENUM',
+    },
+  },
 }
 
 exports.Master = Master

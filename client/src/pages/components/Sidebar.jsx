@@ -13,6 +13,7 @@ import {
   User,
   ChevronRight,
   Shield,
+  Package,
 } from 'lucide-react'
 import { getAccessibleRoutes } from '../../utils/routeProtection'
 import logo from '../../../assets/logo.png'
@@ -45,6 +46,11 @@ const allMasterItems = [
     id: 'store',
     label: 'Store',
     icon: ShoppingBag,
+  },
+  {
+    id: 'parts',
+    label: 'Parts',
+    icon: Package,
   },
   {
     id: 'user',

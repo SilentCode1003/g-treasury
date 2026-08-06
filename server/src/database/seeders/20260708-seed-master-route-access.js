@@ -21,6 +21,7 @@ module.exports = {
       'department',
       'service',
       'store',
+      'parts',
       'user',
       'access',
       'statement',

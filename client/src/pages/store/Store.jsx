@@ -5,6 +5,7 @@ import DynamicTable from '../components/DynamicTable'
 import Modal from '../components/Modal'
 import DynamicToast from '../components/DynamicToast'
 import { apiClient } from '../../api/axios'
+import * as XLSX from 'xlsx'
 
 const formatStatus = (value) => {
   const normalized = String(value || '').toUpperCase()
@@ -138,6 +139,27 @@ export default function Store() {
     } catch (err) {
       showToast('error', 'Unable to download template.')
       setError('Unable to download template.')
+    }
+  }
+
+  const handleDownloadStores = () => {
+    try {
+      const dataToExport = filteredStores.map((store) => ({
+        'STORE NO': store.number,
+        'STORE NAME': store.name,
+        'REGION': store.region,
+        'CITY PROVINCE': store.city_province,
+        'STATUS': store.status,
+      }))
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Stores')
+      XLSX.writeFile(workbook, 'Stores_Data.xlsx')
+      showToast('success', 'Store data downloaded successfully.')
+    } catch (err) {
+      showToast('error', 'Unable to download store data.')
+      setError('Unable to download store data.')
     }
   }
 
@@ -340,6 +362,13 @@ export default function Store() {
             >
               <Download size={16} strokeWidth={2} />
               Download Template
+            </button>
+            <button
+              onClick={handleDownloadStores}
+              className="inline-flex items-center gap-2 rounded border border-purple-600 bg-purple-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-150 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-600"
+            >
+              <Download size={16} strokeWidth={2} />
+              Download Data
             </button>
             <button
               onClick={() => setUploadModalOpen(true)}

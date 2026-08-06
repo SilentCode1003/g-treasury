@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
-import { formatDecimalValue, buildContactLine, getExportCellValue } from './Statementformatters'
+import { formatDecimalValue, buildContactLine, getExportCellValue, formatDateLabel } from './Statementformatters'
 import logo from '../../../assets/logo.png'
 
 // Builds and downloads a .pdf replica of the paper Statement of Account:
@@ -49,7 +49,7 @@ export const exportStatementToPdf = ({ columns, rows, documentMeta = {}, stateme
       doc.text('DATE:', marginRight - 140, cursorY)
       doc.setFont(undefined, 'normal')
       doc.setTextColor(textMuted[0], textMuted[1], textMuted[2])
-      doc.text(String(documentMeta.date), marginRight - 100, cursorY)
+      doc.text(String(formatDateLabel(documentMeta.date) || documentMeta.date), marginRight - 100, cursorY)
     }
 
     const drawCompanyBlock = (label, companyData, leftPos = marginLeft) => {
