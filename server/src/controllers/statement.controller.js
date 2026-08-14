@@ -304,6 +304,11 @@ const saveStatementItems = async (req, res, next) => {
     const vatMode = Boolean(payload.vatMode)
     const quantityMode = Boolean(payload.quantityMode)
     const columnMeta = Array.isArray(payload.columnMeta) ? payload.columnMeta : []
+    
+    // Use provided totals from frontend if available, otherwise calculate them
+    const soa_sub_total = payload.soa_sub_total !== undefined ? Number(payload.soa_sub_total) : null
+    const soa_vat = payload.soa_vat !== undefined ? Number(payload.soa_vat) : null
+    const soa_total = payload.soa_total !== undefined ? Number(payload.soa_total) : null
 
     // Use headers from frontend if provided (for DR NO/RT NO toggles),
     // otherwise build them from headerNames
@@ -321,6 +326,11 @@ const saveStatementItems = async (req, res, next) => {
       quantityMeta: columnMeta,
       returnObject: true,
     })
+
+    // Use frontend totals if provided, otherwise use calculated totals
+    const finalSubTotal = soa_sub_total !== null ? soa_sub_total : calculatedTotals.subTotal
+    const finalVat = soa_vat !== null ? soa_vat : calculatedTotals.vat
+    const finalTotal = soa_total !== null ? soa_total : calculatedTotals.total
 
     const existingItemsQuery = sql
       .select([Statement.statement_items.selectOptionColumns.id])
@@ -362,9 +372,9 @@ const saveStatementItems = async (req, res, next) => {
       .update(
         Statement.statement_of_account.tablename,
         {
-          total: Number(calculatedTotals.total.toFixed(2)),
-          sub_total: Number(calculatedTotals.subTotal.toFixed(2)),
-          vat: Number(calculatedTotals.vat.toFixed(2)),
+          total: Number(finalTotal.toFixed(2)),
+          sub_total: Number(finalSubTotal.toFixed(2)),
+          vat: Number(finalVat.toFixed(2)),
           headers: headers.length ? JSON.stringify(headers) : null,
         },
         {
@@ -382,9 +392,9 @@ const saveStatementItems = async (req, res, next) => {
       data: {
         statement_id: statementId,
         rows,
-        total: Number(calculatedTotals.total.toFixed(2)),
-        subTotal: Number(calculatedTotals.subTotal.toFixed(2)),
-        vat: Number(calculatedTotals.vat.toFixed(2)),
+        total: Number(finalTotal.toFixed(2)),
+        subTotal: Number(finalSubTotal.toFixed(2)),
+        vat: Number(finalVat.toFixed(2)),
         vatMode,
         headers,
       },

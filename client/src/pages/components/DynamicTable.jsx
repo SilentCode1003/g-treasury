@@ -9,6 +9,9 @@ export default function DynamicTable({
   footerMeta = 'Registry System Integrated',
   onRowClick = null,
   selectedRowId = null,
+  onRowHover = null,
+  onRowLeave = null,
+  showActionsColumn = true,
 }) {
   // Local states managing user interface controls
   const [localSearchQuery, setLocalSearchQuery] = useState('')
@@ -167,7 +170,12 @@ export default function DynamicTable({
               {columns.map((col, idx) => (
                 <th
                   key={idx}
-                  className={`sticky top-0 z-10 bg-red-600 px-6 py-3 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                  className={`sticky top-0 z-10 bg-red-600 px-6 py-3 transition-all duration-300 ease-in-out ${col.key === 'actions' && !showActionsColumn ? 'w-0 opacity-0 overflow-hidden p-0' : ''} ${col.key === 'actions' && showActionsColumn ? 'opacity-100' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                  style={col.key === 'actions' ? { 
+                    width: showActionsColumn ? '120px' : '0px',
+                    minWidth: showActionsColumn ? '120px' : '0px',
+                    maxWidth: showActionsColumn ? '120px' : '0px'
+                  } : {}}
                 >
                   {col.header}
                 </th>
@@ -180,6 +188,12 @@ export default function DynamicTable({
                 <tr
                   key={row.id || rowIdx}
                   onClick={() => onRowClick && onRowClick(row)}
+                  onMouseEnter={() => {
+                    onRowHover && onRowHover(row.id)
+                  }}
+                  onMouseLeave={() => {
+                    onRowLeave && onRowLeave()
+                  }}
                   className={`${
                     onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
                   } transition-colors ${
@@ -189,7 +203,12 @@ export default function DynamicTable({
                   {columns.map((col, colIdx) => (
                     <td
                       key={colIdx}
-                      className={`px-6 py-3.5 whitespace-nowrap ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                      className={`px-6 py-3.5 whitespace-nowrap transition-all duration-300 ease-in-out ${col.key === 'actions' && !showActionsColumn ? 'w-0 opacity-0 overflow-hidden p-0' : ''} ${col.key === 'actions' && showActionsColumn ? 'opacity-100' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                      style={col.key === 'actions' ? { 
+                        width: showActionsColumn ? '120px' : '0px',
+                        minWidth: showActionsColumn ? '120px' : '0px',
+                        maxWidth: showActionsColumn ? '120px' : '0px'
+                      } : {}}
                     >
                       {/* Execute custom render functions per column context block */}
                       {col.render ? col.render(row) : renderCellValue(row[col.key])}

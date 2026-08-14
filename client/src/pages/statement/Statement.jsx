@@ -141,6 +141,7 @@ export default function Statement() {
   const [toast, setToast] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [hoveredRowId, setHoveredRowId] = useState(null)
   const [form, setForm] = useState({
     company_from: '',
     company_to: '',
@@ -212,7 +213,7 @@ export default function Statement() {
     loadCompanies()
     loadServices()
     loadStatements()
-  }, [])
+  }, [location.pathname])
 
   const handleEditClick = (row) => {
     const normalizedRowHeaders = normalizeStoredHeaders(row.headers ?? null)
@@ -255,7 +256,7 @@ export default function Statement() {
       } else {
         // Maintenance headers based on format
         if (form.maintenance_format === 'REGIONAL_SUMMARY') {
-          headers = ['AREA', 'NO OF STORE', 'PRICE PER STORE', 'TOTAL AMOUNT', 'SERVICE TYPE', 'WORK DONE']
+          headers = ['AREA', 'NO OF STORE', 'PRICE PER STORE', 'TOTAL AMOUNT']
           title = form.title || 'CCTV MAINTENANCE BILLING - REGIONAL SUMMARY'
         } else if (form.maintenance_format === 'ITEMIZED_PARTS') {
           headers = ['INVOICE', 'STORE NUMBER', 'STORE NAME', 'TICKET NUMBER', 'DESCRIPTION', 'SERVICES DATE', 'WORK DONE', 'PARTS DESCRIPTION', 'PARTS QTY.', 'PRICE', 'SUBTOTAL', 'TOTAL INVOICE AMOUNT']
@@ -338,7 +339,7 @@ export default function Statement() {
       } else {
         // Maintenance headers based on format
         if (editForm.maintenance_format === 'REGIONAL_SUMMARY') {
-          headers = ['AREA', 'NO OF STORE', 'PRICE PER STORE', 'TOTAL AMOUNT', 'SERVICE TYPE', 'WORK DONE']
+          headers = ['AREA', 'NO OF STORE', 'PRICE PER STORE', 'TOTAL AMOUNT']
           title = editForm.title || 'CCTV MAINTENANCE BILLING - REGIONAL SUMMARY'
         } else if (editForm.maintenance_format === 'ITEMIZED_PARTS') {
           headers = ['INVOICE', 'STORE NUMBER', 'STORE NAME', 'TICKET NUMBER', 'DESCRIPTION', 'SERVICES DATE', 'WORK DONE', 'PARTS DESCRIPTION', 'PARTS QTY.', 'PRICE', 'SUBTOTAL', 'TOTAL INVOICE AMOUNT']
@@ -421,7 +422,7 @@ export default function Statement() {
     return <Outlet />
   }
 
-  const columns = [
+  const baseColumns = [
     {
       header: 'ID',
       key: 'id',
@@ -464,34 +465,37 @@ export default function Statement() {
       align: 'right',
       render: (row) => <div className="font-bold text-black">{formatCurrency(row.total)}</div>,
     },
-    {
-      header: 'Actions',
-      key: 'actions',
-      align: 'center',
-      render: (row) => (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => {
-              navigate({ to: '/statement/$id', params: { id: String(row.id) } })
-            }}
-            aria-label="View"
-            title="View"
-            className="rounded border border-gray-200 bg-white p-2 text-green-600 hover:bg-green-50"
-          >
-            <Eye size={16} strokeWidth={1.5} />
-          </button>
-          <button
-            onClick={() => handleEditClick(row)}
-            aria-label="Edit"
-            title="Edit"
-            className="rounded border border-gray-200 bg-white p-2 text-blue-600 hover:bg-blue-50"
-          >
-            <Edit size={16} strokeWidth={1.5} />
-          </button>
-        </div>
-      ),
-    },
   ]
+
+  const actionsColumn = {
+    header: 'Actions',
+    key: 'actions',
+    align: 'center',
+    render: (row) => (
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={() => {
+            navigate({ to: '/statement/$id', params: { id: String(row.id) } })
+          }}
+          aria-label="View"
+          title="View"
+          className="rounded border border-gray-200 bg-white p-2 text-green-600 hover:bg-green-50"
+        >
+          <Eye size={16} strokeWidth={1.5} />
+        </button>
+        <button
+          onClick={() => handleEditClick(row)}
+          aria-label="Edit"
+          title="Edit"
+          className="rounded border border-gray-200 bg-white p-2 text-blue-600 hover:bg-blue-50"
+        >
+          <Edit size={16} strokeWidth={1.5} />
+        </button>
+      </div>
+    ),
+  }
+
+  const columns = [...baseColumns, actionsColumn]
 
   return (
     <Layout
@@ -589,6 +593,9 @@ export default function Statement() {
           registryLabel="Statement Ledger Registry"
           footerLabel="Statement-of-Account Tracking Secure"
           footerMeta="Active Billing Documentation"
+          onRowHover={setHoveredRowId}
+          onRowLeave={() => setHoveredRowId(null)}
+          showActionsColumn={!!hoveredRowId}
         />
       </div>
       {toast ? (

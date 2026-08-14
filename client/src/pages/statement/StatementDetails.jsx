@@ -16,14 +16,72 @@ import {
   isDateColumn,
   isQuantityColumn,
   parseDecimalInput,
+  formatNumberInput,
+  formatQuantityInput,
+  isNumericColumn,
   getComputedSalesTotal,
   getComputedVatValue,
   isStoreNameColumn,
   isStoreNumberColumn,
   isRowNumberColumn,
+  hasPartsColumns,
+  getPartsColumnKeys,
 } from './Statementformatters'
 import { exportStatementToExcel } from './Statementexcelexport'
 import { exportStatementToPdf } from './Statementpdfexport'
+
+// Add CSS keyframes for fade animation
+const fadeInKeyframes = `
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .add-part-row {
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+  }
+  
+  .add-part-row.visible {
+    animation: slideIn 0.3s ease-in-out forwards;
+  }
+  
+  .add-part-row.hiding {
+    animation: slideOut 0.3s ease-in-out forwards;
+  }
+  
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+  }
+  
+  @keyframes slideOut {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
+    }
+  }
+`
 
 const normalizeHeaderKey = (value = '') =>
   String(value ?? '')
@@ -33,6 +91,16 @@ const normalizeHeaderKey = (value = '') =>
     .replace(/^_|_$/g, '')
 
 const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, saving, onTotalsChange }) => {
+  // Inject CSS keyframes for fade animation
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = fadeInKeyframes
+    document.head.appendChild(style)
+    return () => {
+      document.head.removeChild(style)
+    }
+  }, [])
+
   const [rows, setRows] = useState(() => {
     if (Array.isArray(initialRows) && initialRows.length > 0) {
       return initialRows.map((r, i) => ({
@@ -45,6 +113,7 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
   const [cities, setCities] = useState([])
   const [loadingCities, setLoadingCities] = useState(true)
   const [activeAreaDropdown, setActiveAreaDropdown] = useState(null)
+  const [focusedNumericField, setFocusedNumericField] = useState(null)
 
   // Fetch unique cities on component mount
   React.useEffect(() => {
@@ -93,7 +162,7 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
   const addRow = () => {
     setRows((prev) => [
       ...prev,
-      { id: `row-${prev.length + 1}`, values: { area: '', noOfStore: '', pricePerStore: 350, totalAmount: 0, serviceType: 'MAINTENANCE', workDone: 'REPAIR AND MAINTENANCE' } },
+      { id: `row-${prev.length + 1}`, values: { area: '', noOfStore: '', pricePerStore: 350, totalAmount: 0 } },
     ])
   }
 
@@ -102,7 +171,7 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
   }
 
   const handleSave = () => {
-    onSave?.(rows, [{ label: 'AREA' }, { label: 'NO OF STORE' }, { label: 'PRICE PER STORE' }, { label: 'TOTAL AMOUNT' }, { label: 'SERVICE TYPE' }, { label: 'WORK DONE' }], { vatMode: false, quantityMode: false })
+    onSave?.(rows, [{ label: 'AREA' }, { label: 'NO OF STORE' }, { label: 'PRICE PER STORE' }, { label: 'TOTAL AMOUNT' }], { vatMode: false, quantityMode: false })
   }
 
   // Calculate totals
@@ -124,8 +193,6 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
               <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">NO OF STORE</th>
               <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">PRICE PER STORE</th>
               <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">TOTAL AMOUNT</th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">SERVICE TYPE</th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">WORK DONE</th>
               <th className="px-4 py-3 w-10"></th>
             </tr>
           </thead>
@@ -180,48 +247,61 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    value={row.values.noOfStore || ''}
-                    onChange={(e) => handleRowChange(row.id, 'noOfStore', e.target.value)}
-                    className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                    placeholder="0"
-                  />
+                  {(() => {
+                    const fieldKey = `${row.id}-noOfStore`
+                    const isFocused = focusedNumericField === fieldKey
+                    const value = row.values.noOfStore || 0
+                    return (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={isFocused ? String(value) : formatQuantityInput(value)}
+                        onChange={(e) => {
+                          const nextValue = e.target.value.replace(/[^0-9]/g, '')
+                          handleRowChange(row.id, 'noOfStore', nextValue === '' ? 0 : Number(nextValue))
+                        }}
+                        onFocus={() => setFocusedNumericField(fieldKey)}
+                        onBlur={(e) => {
+                          setFocusedNumericField(null)
+                          const formatted = formatQuantityInput(value)
+                          handleRowChange(row.id, 'noOfStore', parseDecimalInput(formatted))
+                        }}
+                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
+                        placeholder="0"
+                      />
+                    )
+                  })()}
                 </td>
                 <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    value={row.values.pricePerStore || 350}
-                    onChange={(e) => handleRowChange(row.id, 'pricePerStore', e.target.value)}
-                    className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                    step="0.01"
-                  />
+                  {(() => {
+                    const fieldKey = `${row.id}-pricePerStore`
+                    const isFocused = focusedNumericField === fieldKey
+                    const value = row.values.pricePerStore || 350
+                    return (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={isFocused ? String(value) : formatNumberInput(value)}
+                        onChange={(e) => {
+                          const nextValue = e.target.value.replace(/[^0-9.]/g, '')
+                          handleRowChange(row.id, 'pricePerStore', nextValue === '' ? 0 : Number(nextValue))
+                        }}
+                        onFocus={() => setFocusedNumericField(fieldKey)}
+                        onBlur={(e) => {
+                          setFocusedNumericField(null)
+                          const formatted = formatNumberInput(value)
+                          handleRowChange(row.id, 'pricePerStore', parseDecimalInput(formatted))
+                        }}
+                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
+                        placeholder="0.00"
+                      />
+                    )
+                  })()}
                 </td>
                 <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    value={row.values.totalAmount || 0}
-                    onChange={(e) => handleRowChange(row.id, 'totalAmount', e.target.value)}
-                    className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-mono"
-                    step="0.01"
-                    readOnly
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="text"
-                    value={row.values.serviceType || 'MAINTENANCE'}
-                    onChange={(e) => handleRowChange(row.id, 'serviceType', e.target.value)}
-                    className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="text"
-                    value={row.values.workDone || 'REPAIR AND MAINTENANCE'}
-                    onChange={(e) => handleRowChange(row.id, 'workDone', e.target.value)}
-                    className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                  />
+                  <div className="w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-mono">
+                    {formatNumberInput(row.values.totalAmount || 0)}
+                  </div>
                 </td>
                 <td className="px-4 py-2">
                   <button
@@ -499,35 +579,96 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         {
           vatMode: vatPerRow,
           quantityMode: Boolean(columns.some((col) => isQuantityColumn(col))),
+          soa_sub_total: computedTotals.subTotal,
+          soa_vat: computedTotals.vat,
+          soa_total: computedTotals.total,
         },
       ),
-    exportExcel: () => exportStatementToExcel({ columns, rows, documentMeta, statementId }),
-    exportPdf: () => exportStatementToPdf({ columns, rows, documentMeta, statementId }),
+    exportExcel: () => exportStatementToExcel({ columns, rows, documentMeta, statementId, totals: computedTotals }),
+    exportPdf: () => exportStatementToPdf({ columns, rows, documentMeta, statementId, totals: computedTotals }),
+    generatePdfPreview: async (showSubtotal, showVat, showTotal) => {
+      try {
+        const blob = await exportStatementToPdf({ 
+          columns, 
+          rows, 
+          documentMeta, 
+          statementId, 
+          totals: computedTotals,
+          showSubtotal,
+          showVat,
+          showTotal
+        })
+        return blob
+      } catch (err) {
+        console.error('Failed to generate PDF preview:', err)
+        throw err
+      }
+    },
   }))
 
   // Compute live totals (subtotal, vat @12%, total) and notify parent when rows change
   useEffect(() => {
-    if (typeof onTotalsChange !== 'function') return
-    const subTotal = rows.reduce((sum, r) => sum + getComputedSalesTotal(r.values, columns), 0)
+    const subTotal = rows.reduce((sum, r) => {
+      // For parts format, sum all part subtotals
+      if (r.parts && r.parts.length > 0) {
+        const partsSum = r.parts.reduce((partSum, part) => {
+          return partSum + (part.values?.subtotal || 0)
+        }, 0)
+        return sum + partsSum
+      }
+      return sum + getComputedSalesTotal(r.values, columns)
+    }, 0)
     const vat = vatPerRow
       ? rows.reduce(
-          (sum, r) => sum + getComputedVatValue(getComputedSalesTotal(r.values, columns)),
+          (sum, r) => sum + getComputedVatValue(
+            r.parts && r.parts.length > 0 
+              ? r.parts.reduce((partSum, part) => partSum + (part.values?.subtotal || 0), 0)
+              : getComputedSalesTotal(r.values, columns)
+          ),
           0,
         )
       : Number((subTotal * 0.12).toFixed(2))
     const total = Number((subTotal + vat).toFixed(2))
-    onTotalsChange({ subTotal, vat, total })
+    setComputedTotals({ subTotal, vat, total })
+    onTotalsChange?.({ subTotal, vat, total })
   }, [rows, columns, onTotalsChange, vatPerRow])
 
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   const [selectedColumnKey, setSelectedColumnKey] = useState('All')
   const [selectedColumnValue, setSelectedColumnValue] = useState('All')
   const [hoveredRowId, setHoveredRowId] = useState(null)
+  const [addPartRowVisible, setAddPartRowVisible] = useState(null)
+  const [addPartRowHiding, setAddPartRowHiding] = useState(null)
   const [qtyPanelOpen, setQtyPanelOpen] = useState(false)
   const [stores, setStores] = useState([])
   const [activeStoreDropdown, setActiveStoreDropdown] = useState({ rowId: null, fieldKey: null })
+  const [focusedNumericField, setFocusedNumericField] = useState(null)
+  const [computedTotals, setComputedTotals] = useState({ subTotal: 0, vat: 0, total: 0 })
   const storeDropdownBlurTimer = useRef(null)
   const qtyPanelCloseTimer = useRef(null)
+  const addPartRowTimer = useRef(null)
+
+  const clearAddPartRowTimer = () => {
+    if (addPartRowTimer.current) {
+      clearTimeout(addPartRowTimer.current)
+      addPartRowTimer.current = null
+    }
+  }
+
+  const handleRowMouseEnter = (rowId) => {
+    clearAddPartRowTimer()
+    setAddPartRowVisible(rowId)
+    setAddPartRowHiding(null)
+  }
+
+  const handleRowMouseLeave = () => {
+    clearAddPartRowTimer()
+    setAddPartRowHiding(addPartRowVisible)
+    addPartRowTimer.current = setTimeout(() => {
+      setAddPartRowVisible(null)
+      setTimeout(() => setAddPartRowHiding(null), 300) // Remove from DOM after transition
+    }, 100) // Small delay before starting hide
+  }
 
   const loadStores = async () => {
     try {
@@ -554,6 +695,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     loadStores()
     return () => {
       clearStoreDropdownBlurTimer()
+      clearAddPartRowTimer()
     }
   }, [])
 
@@ -1107,7 +1249,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               (col, index) =>
                 col.key && (
                   <option key={index} value={col.key}>
-                    {col.header}
+                    {typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
                   </option>
                 ),
             )}
@@ -1135,13 +1277,13 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
             <tr className="border-b border-gray-100 bg-red-600 text-white text-[9px] font-bold uppercase tracking-widest">
               {columns.map((col, idx) => (
                 <th
-                  key={idx}
+                  key={col.key}
                   className={`sticky top-0 z-10 bg-red-600 px-6 py-3 ${col.key === 'date' ? 'w-[6rem] px-3' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
                 >
-                  {col.header}
+                  {typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
                 </th>
               ))}
-              <th className="sticky top-0 z-10 bg-red-600 px-0 py-3 w-0" />
+              <th className="sticky top-0 z-10 bg-red-600 w-0 px-0 py-3"></th>
             </tr>
           </thead>
           <tbody className="group divide-y divide-gray-100 text-xs font-medium text-gray-700">
@@ -1163,14 +1305,15 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                             key={part.id}
                             data-row-id={row.id}
                             className="hover:bg-gray-50/50 transition-colors"
-                            onMouseEnter={() => setHoveredRowId(row.id)}
-                            onMouseLeave={() => setHoveredRowId(null)}
+                            onMouseEnter={() => handleRowMouseEnter(row.id)}
+                            onMouseLeave={() => handleRowMouseLeave()}
                           >
                             {columns.map((col, colIdx) => {
                               const isNumberField = isStoreNumberColumn(col)
                               const isNameField = isStoreNameColumn(col)
                               const isAreaField = String(col.header || '').toUpperCase() === 'AREA'
                               const isDateField = isDateColumn(col)
+                              const isNumericField = isNumericColumn(col)
                               const isPartsDescField = String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION'
                               const isPartsQtyField = String(col.header || '').toUpperCase() === 'PARTS QTY.'
                               const isPriceField = String(col.header || '').toUpperCase() === 'PRICE'
@@ -1316,13 +1459,37 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           </div>
                                         )}
                                       </div>
+                                    ) : isNumericField ? (
+                                      (() => {
+                                        const fieldKey = `${row.id}-${col.key}`
+                                        const isFocused = focusedNumericField === fieldKey
+                                        return (
+                                          <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
+                                            onChange={(e) => {
+                                              const nextValue = e.target.value.replace(/[^0-9.]/g, '')
+                                              handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                            }}
+                                            onFocus={() => setFocusedNumericField(fieldKey)}
+                                            onBlur={(e) => {
+                                              setFocusedNumericField(null)
+                                              const formatted = formatNumberInput(currentValue)
+                                              handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                            }}
+                                            className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                                            placeholder="0.00"
+                                          />
+                                        )
+                                      })()
                                     ) : (
                                       <input
                                         type="text"
                                         value={currentValue}
                                         onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
                                         className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
-                                        placeholder={col.header || 'Enter value'}
+                                        placeholder={typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key) || 'Enter value'}
                                       />
                                     )}
                                   </td>
@@ -1389,28 +1556,54 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                               }
                               
                               if (isPartsQtyField) {
+                                const qtyValue = part.values?.partsQty || 0
+                                const fieldKey = `${row.id}-${part.id}-partsQty`
+                                const isFocused = focusedNumericField === fieldKey
                                 return (
                                   <td key={col.key} className="px-3 py-2">
                                     <input
-                                      type="number"
-                                      value={part.values?.partsQty || 0}
-                                      onChange={(e) => handlePartChange(row.id, part.id, 'partsQty', e.target.value)}
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={isFocused ? String(qtyValue) : formatQuantityInput(qtyValue)}
+                                      onChange={(e) => {
+                                        const nextValue = e.target.value.replace(/[^0-9]/g, '')
+                                        handlePartChange(row.id, part.id, 'partsQty', nextValue === '' ? 0 : Number(nextValue))
+                                      }}
+                                      onFocus={() => setFocusedNumericField(fieldKey)}
+                                      onBlur={(e) => {
+                                        setFocusedNumericField(null)
+                                        const formatted = formatQuantityInput(qtyValue)
+                                        handlePartChange(row.id, part.id, 'partsQty', parseDecimalInput(formatted))
+                                      }}
                                       className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
-                                      min="0"
+                                      placeholder="0"
                                     />
                                   </td>
                                 )
                               }
                               
                               if (isPriceField) {
+                                const priceValue = part.values?.price || 0
+                                const fieldKey = `${row.id}-${part.id}-price`
+                                const isFocused = focusedNumericField === fieldKey
                                 return (
                                   <td key={col.key} className="px-3 py-2">
                                     <input
-                                      type="number"
-                                      value={part.values?.price || 0}
-                                      onChange={(e) => handlePartChange(row.id, part.id, 'price', e.target.value)}
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={isFocused ? String(priceValue) : formatNumberInput(priceValue)}
+                                      onChange={(e) => {
+                                        const nextValue = e.target.value.replace(/[^0-9.]/g, '')
+                                        handlePartChange(row.id, part.id, 'price', nextValue === '' ? 0 : Number(nextValue))
+                                      }}
+                                      onFocus={() => setFocusedNumericField(fieldKey)}
+                                      onBlur={(e) => {
+                                        setFocusedNumericField(null)
+                                        const formatted = formatNumberInput(priceValue)
+                                        handlePartChange(row.id, part.id, 'price', parseDecimalInput(formatted))
+                                      }}
                                       className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
-                                      step="0.01"
+                                      placeholder="0.00"
                                     />
                                   </td>
                                 )
@@ -1456,16 +1649,15 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                       <tr
                         key={row.id || rowIdx}
                         className="hover:bg-gray-50/50 transition-colors"
-                        draggable
-                        onDragStart={(event) => handleDragStart(event, row.id)}
-                        onDragOver={handleDragOver}
-                        onDrop={(event) => handleDrop(event, row.id)}
+                        onMouseEnter={() => handleRowMouseEnter(row.id)}
+                        onMouseLeave={() => handleRowMouseLeave()}
                       >
                         {columns.map((col, colIdx) => {
                           const isNumberField = isStoreNumberColumn(col)
                           const isNameField = isStoreNameColumn(col)
                           const isAreaField = String(col.header || '').toUpperCase() === 'AREA'
                           const isPartsDescField = String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION'
+                          const isNumericField = isNumericColumn(col)
                           const currentValue = row.values?.[col.key] ?? ''
                           const isServiceColumn = Boolean(col.serviceMeta)
                           const isMoneyInputColumn = isSalesColumn(col) || isAdditionalSalesColumn(col)
@@ -1609,33 +1801,57 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                   {formatDecimalValue(currentValue)}
                                 </div>
                               ) : isQtyInputColumn ? (
-                                <input
-                                  type="number"
-                                  inputMode="numeric"
-                                  min="0"
-                                  step="1"
-                                  value={String(currentValue ?? '').replace(/\.0+$/, '')}
-                                  onChange={(e) => {
-                                    const nextValue = e.target.value.replace(/[^0-9]/g, '')
-                                    handleCellChange(
-                                      row.id,
-                                      col.key,
-                                      nextValue === '' ? 0 : Number(nextValue),
-                                    )
-                                  }}
-                                  className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
-                                  placeholder="Qty"
-                                />
+                                (() => {
+                                  const fieldKey = `${row.id}-${col.key}`
+                                  const isFocused = focusedNumericField === fieldKey
+                                  return (
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={isFocused ? String(currentValue) : formatQuantityInput(currentValue)}
+                                      onChange={(e) => {
+                                        const nextValue = e.target.value.replace(/[^0-9]/g, '')
+                                        handleCellChange(
+                                          row.id,
+                                          col.key,
+                                          nextValue === '' ? 0 : Number(nextValue),
+                                        )
+                                      }}
+                                      onFocus={() => setFocusedNumericField(fieldKey)}
+                                      onBlur={(e) => {
+                                        setFocusedNumericField(null)
+                                        const formatted = formatQuantityInput(currentValue)
+                                        handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                      }}
+                                      className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                                      placeholder="0"
+                                    />
+                                  )
+                                })()
                               ) : isMoneyInputColumn ? (
-                                <input
-                                  type="text"
-                                  value={formatDecimalValue(currentValue)}
-                                  onChange={(e) =>
-                                    handleCellChange(row.id, col.key, parseDecimalInput(e.target.value))
-                                  }
-                                  className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
-                                  placeholder={col.header}
-                                />
+                                (() => {
+                                  const fieldKey = `${row.id}-${col.key}`
+                                  const isFocused = focusedNumericField === fieldKey
+                                  return (
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
+                                      onChange={(e) => {
+                                        const nextValue = e.target.value.replace(/[^0-9.]/g, '')
+                                        handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                      }}
+                                      onFocus={() => setFocusedNumericField(fieldKey)}
+                                      onBlur={(e) => {
+                                        setFocusedNumericField(null)
+                                        const formatted = formatNumberInput(currentValue)
+                                        handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                      }}
+                                      className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                                      placeholder="0.00"
+                                    />
+                                  )
+                                })()
                               ) : isTotalField ? (
                                 <span className="block w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">
                                   {formatDecimalValue(getComputedSalesTotal(row.values, columns))}
@@ -1693,13 +1909,37 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     </div>
                                   )}
                                 </div>
+                              ) : isNumericField ? (
+                                (() => {
+                                  const fieldKey = `${row.id}-${col.key}`
+                                  const isFocused = focusedNumericField === fieldKey
+                                  return (
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
+                                      onChange={(e) => {
+                                        const nextValue = e.target.value.replace(/[^0-9.]/g, '')
+                                        handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                      }}
+                                      onFocus={() => setFocusedNumericField(fieldKey)}
+                                      onBlur={(e) => {
+                                        setFocusedNumericField(null)
+                                        const formatted = formatNumberInput(currentValue)
+                                        handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                      }}
+                                      className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                                      placeholder="0.00"
+                                    />
+                                  )
+                                })()
                               ) : (
                                 <input
                                   type="text"
                                   value={currentValue}
                                   onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
                                   className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
-                                  placeholder={col.header}
+                                  placeholder={typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
                                 />
                               )}
                             </td>
@@ -1719,11 +1959,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                         </td>
                       </tr>
                     )}
-                    {hasPartsColumns && hoveredRowId === row.id && (
+                    {hasPartsColumns && (addPartRowVisible === row.id || addPartRowHiding === row.id) && (
                       <tr 
                         data-row-id={row.id}
-                        onMouseEnter={() => setHoveredRowId(row.id)}
-                        onMouseLeave={() => setHoveredRowId(null)}
+                        onMouseEnter={() => handleRowMouseEnter(row.id)}
+                        onMouseLeave={() => handleRowMouseLeave()}
+                        className={`add-part-row ${addPartRowVisible === row.id ? 'visible' : addPartRowHiding === row.id ? 'hiding' : ''}`}
                       >
                         <td colSpan={columns.length + 1} className="px-6 py-2 bg-gray-50">
                           <button
@@ -1977,7 +2218,13 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
       { label: 'PRICE' }, 
       { label: 'SUBTOTAL' }, 
       { label: 'TOTAL INVOICE AMOUNT' }
-    ], { vatMode: false, quantityMode: false })
+    ], { 
+      vatMode: false, 
+      quantityMode: false,
+      soa_sub_total: subTotal,
+      soa_vat: vat,
+      soa_total: total,
+    })
   }
 
   // Calculate totals
@@ -2336,6 +2583,11 @@ export default function StatementDetails() {
   const [serviceQuantitySelection, setServiceQuantitySelection] = useState({})
   const [includeDrNo, setIncludeDrNo] = useState(true)
   const [includeRtNo, setIncludeRtNo] = useState(true)
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
+  const [pdfBlob, setPdfBlob] = useState(null)
+  const [showSubtotal, setShowSubtotal] = useState(true)
+  const [showVat, setShowVat] = useState(true)
+  const [showTotal, setShowTotal] = useState(true)
   const tableRef = useRef(null)
   const [liveMeta, setLiveMeta] = useState({ subTotal: 0, vat: 0, total: 0 })
 
@@ -2510,11 +2762,13 @@ export default function StatementDetails() {
         headerNames,
         vatMode: Boolean(options.vatMode || vatPerRow),
         quantityMode: useQuantity,
-        headers: Array.isArray(statement.soa_headers)
-          ? statement.soa_headers
-          : statement.soa_headers
-            ? JSON.parse(statement.soa_headers)
-            : [],
+        soa_sub_total: options.soa_sub_total,
+        soa_vat: options.soa_vat,
+        soa_total: options.soa_total,
+        headers: columns.map(col => ({
+          key: col.key,
+          header: col.header
+        })),
         columnMeta: columns
           .filter((column) => column.key && (column.serviceMeta || column.quantityMeta))
           .map((column) => ({
@@ -2697,12 +2951,12 @@ export default function StatementDetails() {
 
     let rawHeaders = []
     if (Array.isArray(statement.soa_headers)) {
-      rawHeaders = statement.soa_headers
+      rawHeaders = statement.soa_headers.map(h => typeof h === 'object' ? (h.header || h.key || h) : h)
     } else if (typeof statement.soa_headers === 'string') {
       const trimmed = statement.soa_headers.trim()
       try {
         const parsed = JSON.parse(trimmed)
-        rawHeaders = Array.isArray(parsed) ? parsed : [parsed]
+        rawHeaders = Array.isArray(parsed) ? parsed.map(h => typeof h === 'object' ? (h.header || h.key || h) : h) : [typeof parsed === 'object' ? (parsed.header || parsed.key || parsed) : parsed]
       } catch {
         rawHeaders = trimmed
           .split(',')
@@ -2739,7 +2993,7 @@ export default function StatementDetails() {
     // that could add a duplicate QTY column alongside the checkbox path.
     rawHeaders
       .filter((headerText) => {
-        const normalizedHeader = String(headerText).trim().toLowerCase()
+        const normalizedHeader = String(typeof headerText === 'object' ? (headerText.header || headerText.key || headerText) : headerText).trim().toLowerCase()
         return (
           normalizedHeader !== '%vat' &&
           normalizedHeader !== 'vat' &&
@@ -2749,27 +3003,28 @@ export default function StatementDetails() {
         )
       })
       .forEach((headerText, index) => {
-        const normalizedServiceHeader = normalizeServiceId(headerText)
+        const normalizedHeaderText = typeof headerText === 'object' ? (headerText.header || headerText.key || headerText) : headerText
+        const normalizedServiceHeader = normalizeServiceId(normalizedHeaderText)
         const serviceMatch = services.find((service) => {
           const serviceId = normalizeServiceId(service.id)
           const serviceName = normalizeServiceId(service.name)
           return serviceId === normalizedServiceHeader || serviceName === normalizedServiceHeader
         })
 
-        const baseKey = getUniqueColumnKey(normalizedServiceHeader || headerText, index)
+        const baseKey = getUniqueColumnKey(normalizedServiceHeader || normalizedHeaderText, index)
         const serviceKey = serviceMatch
           ? normalizeHeaderKey(serviceMatch.name || serviceMatch.id)
           : normalizeHeaderKey(baseKey)
 
         columns.push({
           key: baseKey,
-          header: serviceMatch?.name || headerText,
+          header: String(serviceMatch?.name || (typeof headerText === 'object' ? headerText.header || headerText.key || headerText : headerText)),
           align: 'left',
           render: () => <span className="text-gray-400 font-mono">—</span>,
           serviceMeta: serviceMatch
             ? {
                 serviceId: normalizeServiceId(serviceMatch.id),
-                serviceName: serviceMatch.name || headerText,
+                serviceName: serviceMatch.name || (typeof headerText === 'object' ? headerText.header || headerText.key || headerText : headerText),
                 servicePrice: Number(serviceMatch.price || 0),
                 serviceKey,
               }
@@ -2983,7 +3238,15 @@ export default function StatementDetails() {
 
               <button
                 type="button"
-                onClick={() => tableRef.current?.exportPdf()}
+                onClick={async () => {
+                  try {
+                    const blob = await tableRef.current?.generatePdfPreview(showSubtotal, showVat, showTotal)
+                    setPdfBlob(blob)
+                    setPdfPreviewOpen(true)
+                  } catch (err) {
+                    console.error('Failed to generate PDF preview:', err)
+                  }
+                }}
                 className="inline-flex items-center rounded border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50"
               >
                 Export PDF
@@ -3159,6 +3422,125 @@ export default function StatementDetails() {
           </div>
         </div>
       </div>
+
+      {/* PDF Preview Modal */}
+      {pdfPreviewOpen && pdfBlob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full h-[95vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">PDF Preview</h2>
+              <button
+                onClick={() => setPdfPreviewOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4">
+              <iframe
+                src={URL.createObjectURL(pdfBlob)}
+                className="w-full h-full border-0"
+                title="PDF Preview"
+              />
+            </div>
+
+            <div className="p-4 border-t border-gray-200">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium text-gray-700">Show in PDF:</span>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showSubtotal}
+                      onChange={async (e) => {
+                        setShowSubtotal(e.target.checked)
+                        try {
+                          const blob = await tableRef.current?.generatePdfPreview(e.target.checked, showVat, showTotal)
+                          setPdfBlob(blob)
+                        } catch (err) {
+                          console.error('Failed to regenerate PDF:', err)
+                        }
+                      }}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-600">Sub-Total</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showVat}
+                      onChange={async (e) => {
+                        setShowVat(e.target.checked)
+                        try {
+                          const blob = await tableRef.current?.generatePdfPreview(showSubtotal, e.target.checked, showTotal)
+                          setPdfBlob(blob)
+                        } catch (err) {
+                          console.error('Failed to regenerate PDF:', err)
+                        }
+                      }}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-600">12% VAT</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showTotal}
+                      onChange={async (e) => {
+                        setShowTotal(e.target.checked)
+                        try {
+                          const blob = await tableRef.current?.generatePdfPreview(showSubtotal, showVat, e.target.checked)
+                          setPdfBlob(blob)
+                        } catch (err) {
+                          console.error('Failed to regenerate PDF:', err)
+                        }
+                      }}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-600">Total Sales</span>
+                  </label>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setPdfPreviewOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a')
+                      link.href = URL.createObjectURL(pdfBlob)
+                      link.download = `statement-${statementId || 'export'}.pdf`
+                      link.click()
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Download PDF
+                  </button>
+                  <button
+                    onClick={() => {
+                      const printWindow = window.open(URL.createObjectURL(pdfBlob))
+                      if (printWindow) {
+                        printWindow.onload = () => {
+                          printWindow.print()
+                        }
+                      }
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
+                  >
+                    Print
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

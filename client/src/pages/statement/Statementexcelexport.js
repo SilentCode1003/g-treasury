@@ -1,9 +1,9 @@
 import XLSX from 'xlsx-js-style'
-import { formatDecimalValue, buildContactLine, getExportCellValue, formatDateLabel } from './Statementformatters'
+import { formatDecimalValue, buildContactLine, getExportCellValue, formatDateLabel, expandRowsForExport } from './Statementformatters'
 
 // Builds and downloads an .xlsx replica matching the PDF style:
 // Centered grid columns, visible black borders, and clean layout structures.
-export const exportStatementToExcel = ({ columns, rows, documentMeta = {}, statementId }) => {
+export const exportStatementToExcel = ({ columns, rows, documentMeta = {}, statementId, totals }) => {
   try {
     const from = documentMeta.fromCompany || {}
     const to = documentMeta.toCompany || {}
@@ -101,26 +101,20 @@ export const exportStatementToExcel = ({ columns, rows, documentMeta = {}, state
     }))
     pushRow(tableHeaderCells)
 
-    // ----- Table Body Rows -----
-    const tableBodyStartRowIndex = ws_data.length
-    rows.forEach((r, rowIdx) => {
-      const dataRowCells = columns.map((c) => {
-        let val = getExportCellValue(r, c, rowIdx)
-        if (val === true) val = 'X'
-        if (val === false || val === null || val === undefined) val = ''
-
-        return {
-          v: val,
-          t: typeof val === 'number' ? 'n' : 's',
-          s: {
-            font: fontNormal,
-            alignment: { horizontal: 'center', vertical: 'center' },
-            border: borderTable,
-          },
-        }
+    // ----- Table Data Rows -----
+    // Expand rows with nested parts for export
+    const expandedRows = expandRowsForExport(rows, columns)
+    
+    expandedRows.forEach((r, rowIdx) => {
+      const rowCells = columns.map((c) => {
+        const val = getExportCellValue(r, c, rowIdx, r.isPartRow)
+        if (val === true) return { v: 'X', t: 's', s: { font: fontNormal, alignment: { horizontal: 'center' }, border: borderTable } }
+        if (val === false) return { v: '', t: 's', s: { font: fontNormal, border: borderTable } }
+        return { v: val, t: 's', s: { font: fontNormal, alignment: { horizontal: 'center' }, border: borderTable } }
       })
-      pushRow(dataRowCells)
+      pushRow(rowCells)
     })
+    
     const tableBodyEndRowIndex = ws_data.length - 1
 
     pushRow([]) // Spacer
@@ -153,9 +147,9 @@ export const exportStatementToExcel = ({ columns, rows, documentMeta = {}, state
       return row
     }
 
-    pushRow(buildTotalsRow('Sub-Total', formatDecimalValue(documentMeta.subTotal)))
-    pushRow(buildTotalsRow('12% VAT', formatDecimalValue(documentMeta.vat)))
-    pushRow(buildTotalsRow('Total Sales', formatDecimalValue(documentMeta.total), true))
+    pushRow(buildTotalsRow('Sub-Total', formatDecimalValue(totals?.subTotal || documentMeta.subTotal)))
+    pushRow(buildTotalsRow('12% VAT', formatDecimalValue(totals?.vat || documentMeta.vat)))
+    pushRow(buildTotalsRow('Total Sales', formatDecimalValue(totals?.total || documentMeta.total), true))
     const totalsEndRowIndex = ws_data.length - 1
 
     pushRow([])

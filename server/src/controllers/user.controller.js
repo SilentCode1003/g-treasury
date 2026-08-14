@@ -1,6 +1,7 @@
 require('dotenv').config()
 const { Query, SQLQueryBuilder } = require('../database/utilities/queries.util')
 const { Master } = require('../database/model/Master')
+const { EncryptString } = require('../utilities/cryptography.util')
 
 const sql = new SQLQueryBuilder()
 const employeeIdColumn = Master.master_user.selectOptionColumns.employee_id || 'mu_employee_id'
@@ -51,6 +52,9 @@ const createUser = async (req, res, next) => {
       })
     }
 
+    // Encrypt the password before storing
+    const encryptedPassword = EncryptString(password)
+
     const insertQuery = sql
       .insert(
         Master.master_user.tablename,
@@ -58,7 +62,7 @@ const createUser = async (req, res, next) => {
           [employeeIdColumn]: employee_id,
           fullname,
           username,
-          password,
+          password: encryptedPassword,
           access_id,
           status: status || 'ACTIVE',
         },
@@ -76,7 +80,7 @@ const createUser = async (req, res, next) => {
         employee_id,
         fullname,
         username,
-        password,
+        password: encryptedPassword,
         access_id,
         status: status || 'ACTIVE',
       },
@@ -108,7 +112,7 @@ const updateUser = async (req, res, next) => {
     if (employee_id !== undefined) updateData[employeeIdColumn] = employee_id
     if (fullname !== undefined) updateData.fullname = fullname
     if (username !== undefined) updateData.username = username
-    if (password !== undefined) updateData.password = password
+    if (password !== undefined) updateData.password = EncryptString(password)
     if (access_id !== undefined) updateData.access_id = access_id
     if (status !== undefined) updateData.status = status
 
