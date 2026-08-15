@@ -13,6 +13,7 @@ import {
   isSalesColumn,
   isAdditionalSalesColumn,
   isTotalSalesColumn,
+  isMaterialCostColumn,
   isDateColumn,
   isQuantityColumn,
   parseDecimalInput,
@@ -1326,7 +1327,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                             key={part.id}
                             data-row-id={row.id}
                             className={`hover:bg-gray-50/50 transition-colors ${row.color ? '' : ''}`}
-                            style={row.color ? { backgroundColor: `${row.color}20` } : {}}
+                            style={row.color ? { backgroundColor: `${row.color}30` } : {}}
                             onMouseEnter={() => handleRowMouseEnter(row.id)}
                             onMouseLeave={() => handleRowMouseLeave()}
                           >
@@ -1732,7 +1733,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                       <tr
                         key={row.id || rowIdx}
                         className={`hover:bg-gray-50/50 transition-colors ${row.color ? '' : ''}`}
-                        style={row.color ? { backgroundColor: `${row.color}20` } : {}}
+                        style={row.color ? { backgroundColor: `${row.color}30` } : {}}
                         onMouseEnter={() => handleRowMouseEnter(row.id)}
                         onMouseLeave={() => handleRowMouseLeave()}
                       >
@@ -1744,7 +1745,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                           const isNumericField = isNumericColumn(col)
                           const currentValue = row.values?.[col.key] ?? ''
                           const isServiceColumn = Boolean(col.serviceMeta)
-                          const isMoneyInputColumn = isSalesColumn(col) || isAdditionalSalesColumn(col)
+                          const isMoneyInputColumn = isSalesColumn(col) || isAdditionalSalesColumn(col) || isMaterialCostColumn(col)
                           const isTotalField = isTotalSalesColumn(col)
                           const isDateInputColumn = isDateColumn(col)
                           const isVatColumn = col.key === 'vat'

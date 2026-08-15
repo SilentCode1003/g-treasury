@@ -95,7 +95,7 @@ const buildHeadersFromServices = (
   if (includeRtNo) staticHeaderStart.push('RT NO.')
   staticHeaderStart.push('STORE NAME', 'STORE NO.', 'DATE')
   const serviceIds = selected.map((service) => normalizeServiceId(service))
-  const staticHeaderEnd = ['SALES', 'ADDITIONAL SALES (MOBILIZATION)', 'TOTAL SALES']
+  const staticHeaderEnd = ['MATERIAL COST', 'SALES', 'ADDITIONAL SALES (MOBILIZATION)', 'TOTAL SALES']
   const headers = [...staticHeaderStart, ...serviceIds, ...staticHeaderEnd]
   const normalizedExistingHeaders = normalizeStoredHeaders(existingHeaders)
   const hasVatHeader = normalizedExistingHeaders.some(

@@ -71,6 +71,16 @@ export const isSalesColumn = (col) => {
   return header === 'sales' || key === 'sales' || /(^|_)sales$/.test(key)
 }
 
+export const isMaterialCostColumn = (col) => {
+  const header = String(col.header || '')
+    .trim()
+    .toLowerCase()
+  const key = String(col.key || '')
+    .trim()
+    .toLowerCase()
+  return header.includes('material cost') || key.includes('material_cost') || key.includes('materialcost')
+}
+
 export const isAdditionalSalesColumn = (col) => {
   const header = String(col.header || '')
     .trim()
@@ -165,7 +175,7 @@ export const isNumericColumn = (col) => {
     'per store', 'amount per store', 'price per store',
     'vat', 'tax', 'rate', 'percent', '%',
     'vat-ex', 'vat-in', 'vatin', 'vatex',
-    'sales', 'additional', 'mobilization'
+    'sales', 'additional', 'mobilization', 'material'
   ]
   
   return numericKeywords.some(keyword => 
@@ -231,10 +241,12 @@ export const getComputedSalesTotal = (rowValues = {}, columns = []) => {
   }
 
   const salesColumn = columns.find((col) => isSalesColumn(col))
+  const materialCostColumn = columns.find((col) => isMaterialCostColumn(col))
   const additionalSalesColumn = columns.find((col) => isAdditionalSalesColumn(col))
   const serviceColumns = columns.filter((col) => col?.serviceMeta && !isQuantityColumn(col))
 
   const salesValue = salesColumn ? parseDecimalInput(rowValues?.[salesColumn.key]) : 0
+  const materialCostValue = materialCostColumn ? parseDecimalInput(rowValues?.[materialCostColumn.key]) : 0
   const additionalValue = additionalSalesColumn
     ? parseDecimalInput(rowValues?.[additionalSalesColumn.key])
     : 0
@@ -258,7 +270,7 @@ export const getComputedSalesTotal = (rowValues = {}, columns = []) => {
 
   const baseSalesValue = serviceColumns.length > 0 ? serviceSum : salesValue
 
-  return Number((baseSalesValue + additionalValue).toFixed(2))
+  return Number((baseSalesValue + materialCostValue + additionalValue).toFixed(2))
 }
 
 // Builds a single-line "Mobile: xxx   Tel: xxx" contact string, skipping empties
