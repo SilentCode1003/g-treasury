@@ -376,6 +376,7 @@ const saveStatementItems = async (req, res, next) => {
           sub_total: Number(finalSubTotal.toFixed(2)),
           vat: Number(finalVat.toFixed(2)),
           headers: headers.length ? JSON.stringify(headers) : null,
+          service_quantity_selection: payload.serviceQuantitySelection ? JSON.stringify(payload.serviceQuantitySelection) : null,
         },
         {
           prefix: Statement.statement_of_account.prefix,

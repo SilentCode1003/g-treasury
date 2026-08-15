@@ -2660,7 +2660,25 @@ export default function StatementDetails() {
     try {
       setLoading(true)
       const response = await apiClient.get(`/statement/${statementId}`)
-      setStatement(response.data?.data || null)
+      const statementData = response.data?.data || null
+      setStatement(statementData)
+      
+      // Load service quantity selection from saved statement
+      if (statementData?.soa_service_quantity_selection) {
+        try {
+          const parsedSelection = typeof statementData.soa_service_quantity_selection === 'string' 
+            ? JSON.parse(statementData.soa_service_quantity_selection) 
+            : statementData.soa_service_quantity_selection
+          setServiceQuantitySelection(parsedSelection || {})
+          if (Object.keys(parsedSelection || {}).length > 0) {
+            setQuantityMode('add')
+          }
+        } catch (err) {
+          console.error('Error parsing service quantity selection:', err)
+          setServiceQuantitySelection({})
+        }
+      }
+      
       // load saved items for this statement (if any)
       try {
         const itemsResp = await apiClient.get(`/statement/${statementId}/items`)
@@ -2787,6 +2805,7 @@ export default function StatementDetails() {
                 }
               : null,
           })),
+        serviceQuantitySelection: serviceQuantitySelection,
       })
 
       if (response.data?.success) {
