@@ -116,6 +116,17 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
   const [activeAreaDropdown, setActiveAreaDropdown] = useState(null)
   const [focusedNumericField, setFocusedNumericField] = useState(null)
 
+  // Sync rows with initialRows when initialRows changes (e.g., after save)
+  useEffect(() => {
+    if (Array.isArray(initialRows) && initialRows.length > 0) {
+      setRows(initialRows.map((r, i) => ({
+        id: r.id || `row-${i + 1}`,
+        values: r.values || r,
+        color: r.color || null,
+      })))
+    }
+  }, [initialRows])
+
   // Fetch unique cities on component mount
   React.useEffect(() => {
     const fetchCities = async () => {
@@ -374,7 +385,17 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     }
     return [{ id: 'row-1', values: {}, color: null }]
   })
-  
+
+  // Sync rows with initialRows when initialRows changes (e.g., after save)
+  useEffect(() => {
+    if (Array.isArray(initialRows) && initialRows.length > 0) {
+      setRows(initialRows.map((r, i) => {
+        if (r && r.id && r.values) return r
+        return { id: r.id || `row-${i + 1}`, values: r.values || r, color: r.color || null }
+      }))
+    }
+  }, [initialRows])
+
   // Row color picker state
   const [showColorPicker, setShowColorPicker] = useState(null)
 
@@ -833,12 +854,6 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           if (qtyColumn) {
             nextValues[qtyColumn.key] = 1
           }
-        } else {
-          // When service is unchecked, clear the qty for that service
-          const qtyColumn = columns.find((col) => col.quantityMeta?.relatedServiceKey === columnKey)
-          if (qtyColumn) {
-            nextValues[qtyColumn.key] = 0
-          }
         }
 
         // Sum all checked service columns' prices for this row
@@ -872,6 +887,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         }
       }),
     )
+    clearStoreDropdownBlurTimer()
+    setActiveStoreDropdown({ rowId: null, fieldKey: null })
   }
 
   const uniqueColumnValues = useMemo(() => {
@@ -1013,12 +1030,31 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           nextValues[totalSalesColumnKey] = computedTotal
         }
 
+        // Calculate service sum only (without additional sales) for sales column
+        const serviceColumns = columns.filter((col) => col?.serviceMeta && !isQuantityColumn(col))
+        const serviceSum = serviceColumns.reduce((sum, col) => {
+          const price = Number(col.serviceMeta?.servicePrice || 0)
+          const quantityColumn = columns.find(
+            (candidate) =>
+              isQuantityColumn(candidate) &&
+              String(candidate?.quantityMeta?.relatedServiceKey || '').toLowerCase() ===
+                String(col.key || '').toLowerCase(),
+          )
+          const quantityValue = parseDecimalInput(nextValues?.[quantityColumn?.key])
+          const isSelected = Boolean(nextValues?.[col.key]) || quantityValue > 0
+
+          if (!isSelected) return sum
+
+          const effectiveQuantity = quantityColumn ? Math.max(quantityValue, 0) : 1
+          return Number((sum + price * effectiveQuantity).toFixed(2))
+        }, 0)
+
         if (
           changedColumn &&
           (isQuantityColumn(changedColumn) || Boolean(changedColumn.serviceMeta))
         ) {
           if (salesColumnKey) {
-            nextValues[salesColumnKey] = computedTotal
+            nextValues[salesColumnKey] = serviceSum
           }
         }
 
@@ -1026,6 +1062,29 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           changedColumn &&
           (isSalesColumn(changedColumn) || isAdditionalSalesColumn(changedColumn))
         ) {
+          // When additional sales changes, don't affect the sales column
+          // Sales column should only contain service sum
+          if (isAdditionalSalesColumn(changedColumn) && salesColumnKey) {
+            // Recalculate service sum for sales column
+            const serviceColumns = columns.filter((col) => col?.serviceMeta && !isQuantityColumn(col))
+            const serviceSum = serviceColumns.reduce((sum, col) => {
+              const price = Number(col.serviceMeta?.servicePrice || 0)
+              const quantityColumn = columns.find(
+                (candidate) =>
+                  isQuantityColumn(candidate) &&
+                  String(candidate?.quantityMeta?.relatedServiceKey || '').toLowerCase() ===
+                    String(col.key || '').toLowerCase(),
+              )
+              const quantityValue = parseDecimalInput(nextValues?.[quantityColumn?.key])
+              const isSelected = Boolean(nextValues?.[col.key]) || quantityValue > 0
+
+              if (!isSelected) return sum
+
+              const effectiveQuantity = quantityColumn ? Math.max(quantityValue, 0) : 1
+              return Number((sum + price * effectiveQuantity).toFixed(2))
+            }, 0)
+            nextValues[salesColumnKey] = serviceSum
+          }
           if (vatPerRow) {
             nextValues.vat = getComputedVatValue(computedTotal)
           } else {
@@ -1139,25 +1198,29 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           
-          <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50">
-            <input
-              type="checkbox"
-              checked={includeDrNo}
-              onChange={(e) => onToggleDrNo?.(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-red-500 focus:ring-red-500"
-            />
-            <span className="text-xs">DR NO.</span>
-          </label>
+          {columns.some(col => col.serviceMeta) && (
+            <>
+              <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={includeDrNo}
+                  onChange={(e) => onToggleDrNo?.(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-red-500 focus:ring-red-500"
+                />
+                <span className="text-xs">DR NO.</span>
+              </label>
 
-          <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50">
-            <input
-              type="checkbox"
-              checked={includeRtNo}
-              onChange={(e) => onToggleRtNo?.(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-red-500 focus:ring-red-500"
-            />
-            <span className="text-xs">RT NO.</span>
-          </label>
+              <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={includeRtNo}
+                  onChange={(e) => onToggleRtNo?.(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-red-500 focus:ring-red-500"
+                />
+                <span className="text-xs">RT NO.</span>
+              </label>
+            </>
+          )}
           
           <select
             value={vatPerRow ? 'per-row' : 'overall'}
@@ -1170,73 +1233,75 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div
-              className="relative"
-              onMouseEnter={() => {
-                if (quantityMode) {
-                  clearTimeout(qtyPanelCloseTimer.current)
-                  setQtyPanelOpen(true)
-                }
-              }}
-              onMouseLeave={() => {
-                qtyPanelCloseTimer.current = window.setTimeout(() => {
-                  setQtyPanelOpen(false)
-                }, 120)
-              }}
-            >
-              <select
-                value={quantityMode ? 'add' : 'off'}
-                onChange={(event) => {
-                  const v = event.target.value === 'add'
-                  onQuantityModeChange?.(v)
-                  setQtyPanelOpen(Boolean(v))
-                }}
-                onFocus={() => {
+            {columns.some(col => col.serviceMeta) && (
+              <div
+                className="relative"
+                onMouseEnter={() => {
                   if (quantityMode) {
                     clearTimeout(qtyPanelCloseTimer.current)
                     setQtyPanelOpen(true)
                   }
                 }}
-                className="bg-white text-xs text-gray-800 rounded border border-gray-300 px-2 py-1.5 font-medium shadow-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer"
+                onMouseLeave={() => {
+                  qtyPanelCloseTimer.current = window.setTimeout(() => {
+                    setQtyPanelOpen(false)
+                  }, 120)
+                }}
               >
-                <option value="off">No Qty</option>
-                <option value="add">Add Qty</option>
-              </select>
-
-              {quantityMode && qtyPanelOpen ? (
-                <div
-                  className="absolute left-0 top-full z-30 mt-2 min-w-[14rem] max-w-[16rem] rounded border border-gray-700 bg-gray-900 px-3 py-3 shadow-lg"
-                  onMouseEnter={() => {
-                    clearTimeout(qtyPanelCloseTimer.current)
-                    setQtyPanelOpen(true)
+                <select
+                  value={quantityMode ? 'add' : 'off'}
+                  onChange={(event) => {
+                    const v = event.target.value === 'add'
+                    onQuantityModeChange?.(v)
+                    setQtyPanelOpen(Boolean(v))
                   }}
-                  onMouseLeave={() => {
-                    qtyPanelCloseTimer.current = window.setTimeout(() => {
-                      setQtyPanelOpen(false)
-                    }, 120)
+                  onFocus={() => {
+                    if (quantityMode) {
+                      clearTimeout(qtyPanelCloseTimer.current)
+                      setQtyPanelOpen(true)
+                    }
                   }}
+                  className="bg-white text-xs text-gray-800 rounded border border-gray-300 px-2 py-1.5 font-medium shadow-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer"
                 >
-                  <div className="flex flex-col gap-2">
-                    {columns
-                      .filter((column) => column.serviceMeta)
-                      .map((column) => {
-                        const serviceKey = normalizeHeaderKey(
-                          column.serviceMeta?.serviceKey || column.key,
-                        )
+                  <option value="off">No Qty</option>
+                  <option value="add">Add Qty</option>
+                </select>
 
-                        return (
-                          <label
-                            key={serviceKey}
-                            className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-200"
-                          >
-                            <span>{column.header}</span>
-                          </label>
-                        )
-                      })}
+                {quantityMode && qtyPanelOpen ? (
+                  <div
+                    className="absolute left-0 top-full z-30 mt-2 min-w-[14rem] max-w-[16rem] rounded border border-gray-700 bg-gray-900 px-3 py-3 shadow-lg"
+                    onMouseEnter={() => {
+                      clearTimeout(qtyPanelCloseTimer.current)
+                      setQtyPanelOpen(true)
+                    }}
+                    onMouseLeave={() => {
+                      qtyPanelCloseTimer.current = window.setTimeout(() => {
+                        setQtyPanelOpen(false)
+                      }, 120)
+                    }}
+                  >
+                    <div className="flex flex-col gap-2">
+                      {columns
+                        .filter((column) => column.serviceMeta)
+                        .map((column) => {
+                          const serviceKey = normalizeHeaderKey(
+                            column.serviceMeta?.serviceKey || column.key,
+                          )
+
+                          return (
+                            <label
+                              key={serviceKey}
+                              className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-200"
+                            >
+                              <span>{column.header}</span>
+                            </label>
+                          )
+                        })}
+                    </div>
                   </div>
-                </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            )}
           </div>
 
           <input
@@ -1671,6 +1736,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     <div className="flex items-center gap-2">
                                       <span>{formatCurrency(part.values?.subtotal || 0)}</span>
                                       <button
+                                        key={`remove-part-${row.id}-${part.id}`}
                                         onClick={() => removePart(row.id, part.id)}
                                         className="text-red-400 hover:text-red-600"
                                         title="Delete Part"
@@ -2903,6 +2969,15 @@ export default function StatementDetails() {
     }
   }
 
+  const loadStatementItems = async () => {
+    try {
+      const itemsResp = await apiClient.get(`/statement/${statementId}/items`)
+      setInitialRows(itemsResp.data?.data || [])
+    } catch (err) {
+      setInitialRows([])
+    }
+  }
+
   useEffect(() => {
     if (statementId) {
       loadServices()
@@ -2941,6 +3016,7 @@ export default function StatementDetails() {
 
     try {
       setSavingRows(true)
+      
       const fieldNames = columns
         .filter((column) => column.key !== 'vat')
         .map((column) => column.key || column.header)
@@ -3028,9 +3104,14 @@ export default function StatementDetails() {
               }
             : currentStatement,
         )
+        // Reload statement items to reflect saved changes
+        loadStatementItems()
       }
     } catch (err) {
-      const message = err?.response?.data?.message || 'Unable to save statement rows at this time.'
+      console.error('Save statement rows error:', err)
+      console.error('Error response:', err?.response)
+      console.error('Error data:', err?.response?.data)
+      const message = err?.response?.data?.message || err?.message || 'Unable to save statement rows at this time.'
       showToast('error', message)
       setError(message)
     } finally {
@@ -3076,11 +3157,13 @@ export default function StatementDetails() {
 
   // Parse existing headers to detect DR NO and RT NO inclusion
   const parseExistingHeaderFlags = (rawHeaders = []) => {
-    const normalizeHeaderKey = (header = '') =>
-      String(header ?? '')
+    const normalizeHeaderKey = (header = '') => {
+      const headerText = typeof header === 'object' ? (header.header || header.key || header) : header
+      return String(headerText ?? '')
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '')
+    }
 
     const hasDrNo = rawHeaders.some((header) => normalizeHeaderKey(header) === 'drno')
     const hasRtNo = rawHeaders.some((header) => normalizeHeaderKey(header) === 'rtno')
@@ -3090,11 +3173,13 @@ export default function StatementDetails() {
 
   // Rebuild headers by toggling DR NO and RT NO
   const rebuildHeadersWithToggle = (currentHeaders = [], newIncludeDrNo, newIncludeRtNo) => {
-    const normalizeHeaderKey = (header = '') =>
-      String(header ?? '')
+    const normalizeHeaderKey = (header = '') => {
+      const headerText = typeof header === 'object' ? (header.header || header.key || header) : header
+      return String(headerText ?? '')
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '')
+    }
 
     // Filter out DR NO and RT NO from current headers
     const filtered = currentHeaders.filter((header) => {
@@ -3110,11 +3195,11 @@ export default function StatementDetails() {
     let insertPos = noIndex + 1
 
     if (newIncludeDrNo) {
-      result.splice(insertPos, 0, 'DR NO.')
+      result.splice(insertPos, 0, { key: 'dr_no', header: 'DR NO.' })
       insertPos++
     }
     if (newIncludeRtNo) {
-      result.splice(insertPos, 0, 'RT NO.')
+      result.splice(insertPos, 0, { key: 'rt_no', header: 'RT NO.' })
       insertPos++
     }
 
@@ -3122,7 +3207,7 @@ export default function StatementDetails() {
   }
 
   // Handle toggling DR NO inclusion
-  const handleToggleDrNo = (checked) => {
+  const handleToggleDrNo = async (checked) => {
     setIncludeDrNo(checked)
     if (statement?.soa_headers) {
       let rawHeaders = []
@@ -3146,11 +3231,22 @@ export default function StatementDetails() {
         ...prev,
         soa_headers: newHeaders,
       }))
+
+      // Save to server
+      try {
+        await apiClient.put(`/statement/${statementId}`, {
+          headers: newHeaders
+        })
+        // Reload statement details to reflect header changes
+        loadStatementDetails()
+      } catch (err) {
+        console.error('Failed to save headers:', err)
+      }
     }
   }
 
   // Handle toggling RT NO inclusion
-  const handleToggleRtNo = (checked) => {
+  const handleToggleRtNo = async (checked) => {
     setIncludeRtNo(checked)
     if (statement?.soa_headers) {
       let rawHeaders = []
@@ -3174,6 +3270,17 @@ export default function StatementDetails() {
         ...prev,
         soa_headers: newHeaders,
       }))
+
+      // Save to server
+      try {
+        await apiClient.put(`/statement/${statementId}`, {
+          headers: newHeaders
+        })
+        // Reload statement details to reflect header changes
+        loadStatementDetails()
+      } catch (err) {
+        console.error('Failed to save headers:', err)
+      }
     }
   }
 
@@ -3207,6 +3314,7 @@ export default function StatementDetails() {
         .replace(/^_|_$/g, '')
 
     const getUniqueColumnKey = (baseKey = '', fallbackIndex = 0) => {
+      // Always use the header text to generate the key, never fall back to numeric index
       const normalizedBase = toSlug(baseKey) || `column_${fallbackIndex}`
       let candidate = normalizedBase
       let suffix = 2
@@ -3240,7 +3348,10 @@ export default function StatementDetails() {
           return serviceId === normalizedServiceHeader || serviceName === normalizedServiceHeader
         })
 
-        const baseKey = getUniqueColumnKey(normalizedServiceHeader || normalizedHeaderText, index)
+        // Use the actual header text as the key, not the normalized service header
+        // This ensures the key matches what the user sees in the header
+        const headerTextForKey = String(serviceMatch?.name || (typeof headerText === 'object' ? headerText.header || headerText.key || headerText : headerText))
+        const baseKey = getUniqueColumnKey(headerTextForKey, index)
         const serviceKey = serviceMatch
           ? normalizeHeaderKey(serviceMatch.name || serviceMatch.id)
           : normalizeHeaderKey(baseKey)
@@ -3433,16 +3544,16 @@ export default function StatementDetails() {
         />
       ) : null}
 
-      <div className="mx-auto flex flex-col h-auto overflow-visible lg:h-[calc(100vh-110px)] space-y-4 lg:overflow-hidden">
+      <div className="mx-auto flex flex-col h-auto overflow-visible lg:h-[calc(100vh-110px)] space-y-2 lg:overflow-hidden">
         {/* Top Control Block & Breadcrumb Node */}
         <div className="flex flex-col gap-2 lg:shrink-0">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+          {/* <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-400">
             <span>Audit Desk</span>
             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
             </svg>
             <span className="text-red-600">Statement Node Details</span>
-          </div>
+          </div> */}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
@@ -3491,8 +3602,8 @@ export default function StatementDetails() {
         </div>
 
         {/* Brand Master Document Header Panel */}
-        <div className="rounded border border-gray-200 bg-white p-6 shadow-sm lg:shrink-0">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-gray-100 pb-5">
+        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm lg:shrink-0">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex items-center gap-3.5">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-black text-white">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3513,42 +3624,42 @@ export default function StatementDetails() {
                 </p>
               </div>
             </div>
-          </div>
 
-          {/* Account Source/Destination Metadata Nodes */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded bg-gray-50/60 border border-gray-100 p-4">
-              <p className="text-[12px] font-bold tracking-widest text-gray-400">From:</p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
-                <span className="font-bold text-black">
-                  {companyMap[statement.soa_company_from]?.name || statement.soa_company_from}
-                </span>
-                {companyMap[statement.soa_company_from]?.address && (
-                  <span>{companyMap[statement.soa_company_from].address}</span>
-                )}
-                {companyMap[statement.soa_company_from]?.mobile && (
-                  <span>Mobile: {companyMap[statement.soa_company_from].mobile}</span>
-                )}
-                {companyMap[statement.soa_company_from]?.phone && (
-                  <span>Phone: {companyMap[statement.soa_company_from].phone}</span>
-                )}
+            {/* Account Source/Destination Metadata Nodes */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded bg-gray-50/60 border border-gray-100 p-4">
+                <p className="text-[12px] font-bold tracking-widest text-gray-400">From:</p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
+                  <span className="font-bold text-black">
+                    {companyMap[statement.soa_company_from]?.name || statement.soa_company_from}
+                  </span>
+                  {companyMap[statement.soa_company_from]?.address && (
+                    <span>{companyMap[statement.soa_company_from].address}</span>
+                  )}
+                  {companyMap[statement.soa_company_from]?.mobile && (
+                    <span>Mobile: {companyMap[statement.soa_company_from].mobile}</span>
+                  )}
+                  {companyMap[statement.soa_company_from]?.phone && (
+                    <span>Phone: {companyMap[statement.soa_company_from].phone}</span>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="rounded bg-gray-50/60 border border-gray-100 p-4">
-              <p className="text-[12px] font-bold tracking-widest text-gray-400">To:</p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
-                <span className="font-bold text-black">
-                  {companyMap[statement.soa_company_to]?.name || statement.soa_company_to}
-                </span>
-                {companyMap[statement.soa_company_to]?.address && (
-                  <span>{companyMap[statement.soa_company_to].address}</span>
-                )}
-                {companyMap[statement.soa_company_to]?.mobile && (
-                  <span>Mobile: {companyMap[statement.soa_company_to].mobile}</span>
-                )}
-                {companyMap[statement.soa_company_to]?.phone && (
-                  <span>Phone: {companyMap[statement.soa_company_to].phone}</span>
-                )}
+              <div className="rounded bg-gray-50/60 border border-gray-100 p-4">
+                <p className="text-[12px] font-bold tracking-widest text-gray-400">To:</p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
+                  <span className="font-bold text-black">
+                    {companyMap[statement.soa_company_to]?.name || statement.soa_company_to}
+                  </span>
+                  {companyMap[statement.soa_company_to]?.address && (
+                    <span>{companyMap[statement.soa_company_to].address}</span>
+                  )}
+                  {companyMap[statement.soa_company_to]?.mobile && (
+                    <span>Mobile: {companyMap[statement.soa_company_to].mobile}</span>
+                  )}
+                  {companyMap[statement.soa_company_to]?.phone && (
+                    <span>Phone: {companyMap[statement.soa_company_to].phone}</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -388,7 +388,6 @@ const uploadStores = async (req, res, next) => {
 
 const getUniqueCities = async (req, res, next) => {
   try {
-    console.log('=== getUniqueCities called ===')
     const { search } = req.query
     
     // First, let's try a simple query to get all stores
@@ -400,10 +399,7 @@ const getUniqueCities = async (req, res, next) => {
       .from(Master.master_store.tablename)
       .limit(5)
       .build()
-
-    console.log('Test Query:', testQuery)
     const testResult = await Query(testQuery, testBindings)
-    console.log('Test result (first 5 stores):', testResult)
 
     // Now get all cities with optional search filter
     let queryBuilder = sql
@@ -423,17 +419,10 @@ const getUniqueCities = async (req, res, next) => {
       .orderBy(Master.master_store.selectOptionColumns.city_province, 'ASC')
       .build()
 
-    console.log('Cities Query:', query)
-    console.log('Bindings:', bindings)
-
     const cities = await Query(query, bindings)
-    console.log('Raw cities from DB:', cities)
-    console.log('Number of cities returned:', cities.length)
 
     // Extract unique cities, filtering out null/empty values
     const uniqueCities = [...new Set(cities.map((c) => c.city_province).filter((c) => c && c.trim() !== ''))]
-    console.log('Unique cities:', uniqueCities)
-    console.log('Number of unique cities:', uniqueCities.length)
 
     return res.status(200).json({
       success: true,

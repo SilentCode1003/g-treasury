@@ -41,6 +41,7 @@ const httpLogger = morgan(format, {
     if (req.url === '/health' || req.url === '/status' || req.url === '/ping') return true
     if (req.url === '/favicon.ico') return true
     if (req.url.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2)$/)) return true
+    if (req.url === '/store/unique-cities') return true
 
     return false
   },
