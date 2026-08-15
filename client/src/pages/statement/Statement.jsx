@@ -433,20 +433,28 @@ export default function Statement() {
     {
       header: 'Title',
       key: 'title',
-      render: (row) => <div className="font-bold text-black">{row.title}</div>,
+      render: (row) => (
+        <div className="font-bold text-black max-w-[300px] truncate" title={row.title}>
+          {row.title}
+        </div>
+      ),
     },
     {
       header: 'Company From',
       key: 'company_from',
       render: (row) => (
-        <div className="text-neutral-500">{companyMap[row.company_from] || row.company_from}</div>
+        <div className="text-neutral-500 max-w-[200px] truncate" title={companyMap[row.company_from] || row.company_from}>
+          {companyMap[row.company_from] || row.company_from}
+        </div>
       ),
     },
     {
       header: 'Company To',
       key: 'company_to',
       render: (row) => (
-        <div className="text-neutral-500">{companyMap[row.company_to] || row.company_to}</div>
+        <div className="text-neutral-500 max-w-[200px] truncate" title={companyMap[row.company_to] || row.company_to}>
+          {companyMap[row.company_to] || row.company_to}
+        </div>
       ),
     },
     {
