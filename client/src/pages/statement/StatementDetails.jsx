@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useImperativeHandle } from 'react'
-import { ChevronLeft, Trash2 } from 'lucide-react'
+import { ChevronLeft, Trash2, Palette } from 'lucide-react'
 import { useLocation, useMatch, useNavigate } from '@tanstack/react-router'
 import Layout from '../components/Layout'
 import DynamicToast from '../components/DynamicToast'
@@ -284,7 +284,12 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
                         value={isFocused ? String(value) : formatNumberInput(value)}
                         onChange={(e) => {
                           const nextValue = e.target.value.replace(/[^0-9.]/g, '')
-                          handleRowChange(row.id, 'pricePerStore', nextValue === '' ? 0 : Number(nextValue))
+                          // Keep as string if it ends with dot or has decimal being typed
+                          if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                            handleRowChange(row.id, 'pricePerStore', nextValue)
+                          } else {
+                            handleRowChange(row.id, 'pricePerStore', nextValue === '' ? 0 : Number(nextValue))
+                          }
                         }}
                         onFocus={() => setFocusedNumericField(fieldKey)}
                         onBlur={(e) => {
@@ -365,11 +370,34 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     if (Array.isArray(initialRows) && initialRows.length > 0) {
       return initialRows.map((r, i) => {
         if (r && r.id && r.values) return r
-        return { id: r.id || `row-${i + 1}`, values: r.values || r }
+        return { id: r.id || `row-${i + 1}`, values: r.values || r, color: r.color || null }
       })
     }
-    return [{ id: 'row-1', values: {} }]
+    return [{ id: 'row-1', values: {}, color: null }]
   })
+  
+  // Row color picker state
+  const [showColorPicker, setShowColorPicker] = useState(null)
+
+  // Row color management functions
+  const handleRowColorChange = (rowId, color) => {
+    setRows(prevRows => prevRows.map(row => 
+      row.id === rowId ? { ...row, color } : row
+    ))
+    setShowColorPicker(null)
+  }
+
+  const handleCustomColorChange = (rowId, color) => {
+    setRows(prevRows => prevRows.map(row => 
+      row.id === rowId ? { ...row, color } : row
+    ))
+  }
+
+  const handleRowColorRemove = (rowId) => {
+    setRows(prevRows => prevRows.map(row => 
+      row.id === rowId ? { ...row, color: null } : row
+    ))
+  }
   
   // Apply default values for SERVICE TYPE and WORK DONE columns
   React.useEffect(() => {
@@ -466,21 +494,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   React.useEffect(() => {
     if (hasPartsColumns) {
       setRows((prevRows) => {
-        let needsUpdate = false
-        const updatedRows = prevRows.map((row) => {
+        return prevRows.map((row) => {
           if (!row.parts || row.parts.length === 0) {
-            needsUpdate = true
-            return { 
-              ...row, 
-              parts: [{
-                id: `part-${row.id}-initial`,
-                values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 }
-              }]
-            }
+            return { ...row, parts: [] }
           }
           return row
         })
-        return needsUpdate ? updatedRows : prevRows
       })
     }
   }, [hasPartsColumns])
@@ -1283,7 +1302,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                   {typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
                 </th>
               ))}
-              <th className="sticky top-0 z-10 bg-red-600 w-0 px-0 py-3"></th>
+              <th className="sticky top-0 z-10 bg-red-600 w-16 px-3 py-3">
+                <span className="text-[9px] font-bold uppercase tracking-widest">Color</span>
+              </th>
             </tr>
           </thead>
           <tbody className="group divide-y divide-gray-100 text-xs font-medium text-gray-700">
@@ -1304,7 +1325,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                           <tr
                             key={part.id}
                             data-row-id={row.id}
-                            className="hover:bg-gray-50/50 transition-colors"
+                            className={`hover:bg-gray-50/50 transition-colors ${row.color ? '' : ''}`}
+                            style={row.color ? { backgroundColor: `${row.color}20` } : {}}
                             onMouseEnter={() => handleRowMouseEnter(row.id)}
                             onMouseLeave={() => handleRowMouseLeave()}
                           >
@@ -1470,7 +1492,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
                                             onChange={(e) => {
                                               const nextValue = e.target.value.replace(/[^0-9.]/g, '')
-                                              handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                              // Keep as string if it ends with dot or has decimal being typed
+                                              if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                                handleCellChange(row.id, col.key, nextValue)
+                                              } else {
+                                                handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                              }
                                             }}
                                             onFocus={() => setFocusedNumericField(fieldKey)}
                                             onBlur={(e) => {
@@ -1594,7 +1621,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       value={isFocused ? String(priceValue) : formatNumberInput(priceValue)}
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9.]/g, '')
-                                        handlePartChange(row.id, part.id, 'price', nextValue === '' ? 0 : Number(nextValue))
+                                        // Keep as string if it ends with dot or has decimal being typed
+                                        if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                          handlePartChange(row.id, part.id, 'price', nextValue)
+                                        } else {
+                                          handlePartChange(row.id, part.id, 'price', nextValue === '' ? 0 : Number(nextValue))
+                                        }
                                       }}
                                       onFocus={() => setFocusedNumericField(fieldKey)}
                                       onBlur={(e) => {
@@ -1629,12 +1661,63 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                               return <td key={col.key} className="px-6 py-3"></td>
                             })}
                             {isFirstPart && (
-                              <td rowSpan={partsCount} className="w-0 px-0 py-2 overflow-hidden transition-all duration-200 group-hover:w-12 group-hover:px-0 group-focus-within:w-12 group-focus-within:px-0">
-                                <div className="flex h-full items-center justify-center">
+                              <td rowSpan={partsCount} className="w-16 px-2 py-2">
+                                <div className="flex items-center gap-1">
+                                  <div className="relative">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setShowColorPicker(row.id)
+                                      }}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-gray-600 hover:bg-gray-100 transition-colors"
+                                      title="Set row color"
+                                    >
+                                      <Palette size={14} />
+                                      {row.color && (
+                                        <div 
+                                          className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
+                                          style={{ backgroundColor: row.color }}
+                                        />
+                                      )}
+                                    </button>
+                                    {showColorPicker === row.id && (
+                                      <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
+                                        <div className="grid grid-cols-6 gap-1 mb-2">
+                                          {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
+                                            <button
+                                              key={color}
+                                              onClick={() => handleRowColorChange(row.id, color)}
+                                              className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                                              style={{ backgroundColor: color }}
+                                              title={color}
+                                            />
+                                          ))}
+                                        </div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <input
+                                            type="color"
+                                            value={row.color || '#ff0000'}
+                                            onChange={(e) => handleCustomColorChange(row.id, e.target.value)}
+                                            className="w-8 h-8 rounded cursor-pointer"
+                                          />
+                                          <span className="text-xs text-gray-600">Custom</span>
+                                        </div>
+                                        {row.color && (
+                                          <button
+                                            onClick={() => handleRowColorRemove(row.id)}
+                                            className="w-full text-xs text-red-600 hover:text-red-800"
+                                          >
+                                            Remove Color
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                   <button
                                     onClick={() => handleDeleteRow(row.id)}
-                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border cursor-pointer text-white bg-red-600 opacity-0 transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-white bg-red-600 hover:bg-red-700 transition-colors"
                                     aria-label="Delete row"
+                                    title="Delete row"
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -1648,7 +1731,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                       // Regular row without parts
                       <tr
                         key={row.id || rowIdx}
-                        className="hover:bg-gray-50/50 transition-colors"
+                        className={`hover:bg-gray-50/50 transition-colors ${row.color ? '' : ''}`}
+                        style={row.color ? { backgroundColor: `${row.color}20` } : {}}
                         onMouseEnter={() => handleRowMouseEnter(row.id)}
                         onMouseLeave={() => handleRowMouseLeave()}
                       >
@@ -1839,7 +1923,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9.]/g, '')
-                                        handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                        // Keep as string if it ends with dot or has decimal being typed
+                                        if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                          handleCellChange(row.id, col.key, nextValue)
+                                        } else {
+                                          handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                        }
                                       }}
                                       onFocus={() => setFocusedNumericField(fieldKey)}
                                       onBlur={(e) => {
@@ -1920,7 +2009,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9.]/g, '')
-                                        handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                        // Keep as string if it ends with dot or has decimal being typed
+                                        if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                          handleCellChange(row.id, col.key, nextValue)
+                                        } else {
+                                          handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                        }
                                       }}
                                       onFocus={() => setFocusedNumericField(fieldKey)}
                                       onBlur={(e) => {
@@ -1945,13 +2039,64 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                             </td>
                           )
                         })}
-                        <td className="w-0 px-0 py-2 overflow-hidden transition-all duration-200 group-hover:w-12 group-hover:px-0 group-focus-within:w-12 group-focus-within:px-0">
-                          <div className="flex h-full items-center justify-center">
+                        <td className="w-16 px-2 py-2">
+                          <div className="flex items-center gap-1">
+                            <div className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setShowColorPicker(row.id)
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-gray-600 hover:bg-gray-100 transition-colors"
+                                title="Set row color"
+                              >
+                                <Palette size={14} />
+                                {row.color && (
+                                  <div 
+                                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
+                                    style={{ backgroundColor: row.color }}
+                                  />
+                                )}
+                              </button>
+                              {showColorPicker === row.id && (
+                                <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
+                                  <div className="grid grid-cols-6 gap-1 mb-2">
+                                    {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
+                                      <button
+                                        key={color}
+                                        onClick={() => handleRowColorChange(row.id, color)}
+                                        className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                                        style={{ backgroundColor: color }}
+                                        title={color}
+                                      />
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <input
+                                      type="color"
+                                      value={row.color || '#ff0000'}
+                                      onChange={(e) => handleCustomColorChange(row.id, e.target.value)}
+                                      className="w-8 h-8 rounded cursor-pointer"
+                                    />
+                                    <span className="text-xs text-gray-600">Custom</span>
+                                  </div>
+                                  {row.color && (
+                                    <button
+                                      onClick={() => handleRowColorRemove(row.id)}
+                                      className="w-full text-xs text-red-600 hover:text-red-800"
+                                    >
+                                      Remove Color
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleDeleteRow(row.id)}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border cursor-pointer text-white bg-red-600 opacity-0 transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-white bg-red-600 hover:bg-red-700 transition-colors"
                               aria-label="Delete row"
+                              title="Delete row"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -1966,7 +2111,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                         onMouseLeave={() => handleRowMouseLeave()}
                         className={`add-part-row ${addPartRowVisible === row.id ? 'visible' : addPartRowHiding === row.id ? 'hiding' : ''}`}
                       >
-                        <td colSpan={columns.length + 1} className="px-6 py-2 bg-gray-50">
+                        <td colSpan={columns.length + 2} className="px-6 py-2 bg-gray-50">
                           <button
                             onClick={() => addPart(row.id)}
                             className="inline-flex items-center rounded border border-green-200 bg-green-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
@@ -1982,7 +2127,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
             ) : (
               <tr>
                 <td
-                  colSpan={columns.length + 1}
+                  colSpan={columns.length + 2}
                   className="px-6 py-12 text-center text-xs font-medium text-gray-400 uppercase tracking-widest"
                 >
                   No tracking records discovered matching selection filters.
@@ -1990,7 +2135,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               </tr>
             )}
             <tr>
-              <td colSpan={columns.length + 1} className="px-6 py-3">
+              <td colSpan={columns.length + 2} className="px-6 py-3">
                 <div className="flex justify-center">
                   <button
                     type="button"
@@ -2590,6 +2735,10 @@ export default function StatementDetails() {
   const [showTotal, setShowTotal] = useState(true)
   const tableRef = useRef(null)
   const [liveMeta, setLiveMeta] = useState({ subTotal: 0, vat: 0, total: 0 })
+  
+  // Column color management
+  const [columnColors, setColumnColors] = useState({})
+  const [showColorPicker, setShowColorPicker] = useState(null) // Store column key for which picker is open
 
   // The one and only source of truth for "this service actually has saved
   // quantity data" — read straight from the persisted row values (keys
@@ -2771,6 +2920,7 @@ export default function StatementDetails() {
         return {
           ...row,
           values,
+          color: row.color || null,
         }
       })
 
@@ -2859,6 +3009,23 @@ export default function StatementDetails() {
     // Turning "Add Qty" on/off never pre-selects any service — the user
     // must explicitly check which service(s) need a QTY column.
     setServiceQuantitySelection({})
+  }
+
+  // Column color management functions
+  const handleColorChange = (columnKey, color) => {
+    setColumnColors(prev => ({
+      ...prev,
+      [columnKey]: color
+    }))
+    setShowColorPicker(null)
+  }
+
+  const handleRemoveColor = (columnKey) => {
+    setColumnColors(prev => {
+      const newColors = { ...prev }
+      delete newColors[columnKey]
+      return newColors
+    })
   }
 
   // Parse existing headers to detect DR NO and RT NO inclusion
