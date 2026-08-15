@@ -656,7 +656,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   const [selectedColumnKey, setSelectedColumnKey] = useState('All')
   const [selectedColumnValue, setSelectedColumnValue] = useState('All')
-  const [hoveredRowId, setHoveredRowId] = useState(null)
+  const [isTableHovered, setIsTableHovered] = useState(false)
   const [addPartRowVisible, setAddPartRowVisible] = useState(null)
   const [addPartRowHiding, setAddPartRowHiding] = useState(null)
   const [qtyPanelOpen, setQtyPanelOpen] = useState(false)
@@ -1292,7 +1292,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       </div>
 
       <div className="overflow-x-auto lg:flex-1 lg:overflow-y-auto">
-        <table className="w-full text-center border-collapse relative">
+        <table className="w-full text-center border-collapse relative" onMouseEnter={() => setIsTableHovered(true)} onMouseLeave={() => setIsTableHovered(false)}>
           <thead>
             <tr className="border-b border-gray-100 bg-red-600 text-white text-[9px] font-bold uppercase tracking-widest">
               {columns.map((col, idx) => (
@@ -1303,9 +1303,11 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                   {typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
                 </th>
               ))}
-              <th className="sticky top-0 z-10 bg-red-600 w-16 px-3 py-3">
-                <span className="text-[9px] font-bold uppercase tracking-widest">Color</span>
-              </th>
+              {isTableHovered && (
+                <th className="sticky top-0 z-10 bg-red-600 w-16 px-3 py-3">
+                  <span className="text-[9px] font-bold uppercase tracking-widest">Color</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="group divide-y divide-gray-100 text-xs font-medium text-gray-700">
@@ -1326,6 +1328,10 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                           <tr
                             key={part.id}
                             data-row-id={row.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, row.id)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, row.id)}
                             className={`hover:bg-gray-50/50 transition-colors ${row.color ? '' : ''}`}
                             style={row.color ? { backgroundColor: `${row.color}30` } : {}}
                             onMouseEnter={() => handleRowMouseEnter(row.id)}
@@ -1661,7 +1667,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                               
                               return <td key={col.key} className="px-6 py-3"></td>
                             })}
-                            {isFirstPart && (
+                            {isFirstPart && isTableHovered && (
                               <td rowSpan={partsCount} className="w-16 px-2 py-2">
                                 <div className="flex items-center gap-1">
                                   <div className="relative">
@@ -1675,7 +1681,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     >
                                       <Palette size={14} />
                                       {row.color && (
-                                        <div 
+                                        <div
                                           className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
                                           style={{ backgroundColor: row.color }}
                                         />
@@ -1732,6 +1738,10 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                       // Regular row without parts
                       <tr
                         key={row.id || rowIdx}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, row.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, row.id)}
                         className={`hover:bg-gray-50/50 transition-colors ${row.color ? '' : ''}`}
                         style={row.color ? { backgroundColor: `${row.color}30` } : {}}
                         onMouseEnter={() => handleRowMouseEnter(row.id)}
@@ -2040,69 +2050,71 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                             </td>
                           )
                         })}
-                        <td className="w-16 px-2 py-2">
-                          <div className="flex items-center gap-1">
-                            <div className="relative">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setShowColorPicker(row.id)
-                                }}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-gray-600 hover:bg-gray-100 transition-colors"
-                                title="Set row color"
-                              >
-                                <Palette size={14} />
-                                {row.color && (
-                                  <div 
-                                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
-                                    style={{ backgroundColor: row.color }}
-                                  />
-                                )}
-                              </button>
-                              {showColorPicker === row.id && (
-                                <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
-                                  <div className="grid grid-cols-6 gap-1 mb-2">
-                                    {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
-                                      <button
-                                        key={color}
-                                        onClick={() => handleRowColorChange(row.id, color)}
-                                        className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
-                                        style={{ backgroundColor: color }}
-                                        title={color}
-                                      />
-                                    ))}
-                                  </div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <input
-                                      type="color"
-                                      value={row.color || '#ff0000'}
-                                      onChange={(e) => handleCustomColorChange(row.id, e.target.value)}
-                                      className="w-8 h-8 rounded cursor-pointer"
-                                    />
-                                    <span className="text-xs text-gray-600">Custom</span>
-                                  </div>
+                        {isTableHovered && (
+                          <td className="w-16 px-2 py-2">
+                            <div className="flex items-center gap-1">
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setShowColorPicker(row.id)
+                                  }}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-gray-600 hover:bg-gray-100 transition-colors"
+                                  title="Set row color"
+                                >
+                                  <Palette size={14} />
                                   {row.color && (
-                                    <button
-                                      onClick={() => handleRowColorRemove(row.id)}
-                                      className="w-full text-xs text-red-600 hover:text-red-800"
-                                    >
-                                      Remove Color
-                                    </button>
+                                    <div
+                                      className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
+                                      style={{ backgroundColor: row.color }}
+                                    />
                                   )}
-                                </div>
-                              )}
+                                </button>
+                                {showColorPicker === row.id && (
+                                  <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
+                                    <div className="grid grid-cols-6 gap-1 mb-2">
+                                      {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
+                                        <button
+                                          key={color}
+                                          onClick={() => handleRowColorChange(row.id, color)}
+                                          className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                                          style={{ backgroundColor: color }}
+                                          title={color}
+                                        />
+                                      ))}
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <input
+                                        type="color"
+                                        value={row.color || '#ff0000'}
+                                        onChange={(e) => handleCustomColorChange(row.id, e.target.value)}
+                                        className="w-8 h-8 rounded cursor-pointer"
+                                      />
+                                      <span className="text-xs text-gray-600">Custom</span>
+                                    </div>
+                                    {row.color && (
+                                      <button
+                                        onClick={() => handleRowColorRemove(row.id)}
+                                        className="w-full text-xs text-red-600 hover:text-red-800"
+                                      >
+                                        Remove Color
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRow(row.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-white bg-red-600 hover:bg-red-700 transition-colors"
+                                aria-label="Delete row"
+                                title="Delete row"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteRow(row.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-white bg-red-600 hover:bg-red-700 transition-colors"
-                              aria-label="Delete row"
-                              title="Delete row"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
+                          </td>
+                        )}
                       </tr>
                     )}
                     {hasPartsColumns && (addPartRowVisible === row.id || addPartRowHiding === row.id) && (
@@ -2112,7 +2124,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                         onMouseLeave={() => handleRowMouseLeave()}
                         className={`add-part-row ${addPartRowVisible === row.id ? 'visible' : addPartRowHiding === row.id ? 'hiding' : ''}`}
                       >
-                        <td colSpan={columns.length + 2} className="px-6 py-2 bg-gray-50">
+                        <td colSpan={columns.length + (isTableHovered ? 2 : 1)} className="px-6 py-2 bg-gray-50">
                           <button
                             onClick={() => addPart(row.id)}
                             className="inline-flex items-center rounded border border-green-200 bg-green-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
@@ -2128,7 +2140,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
             ) : (
               <tr>
                 <td
-                  colSpan={columns.length + 2}
+                  colSpan={columns.length + (isTableHovered ? 2 : 1)}
                   className="px-6 py-12 text-center text-xs font-medium text-gray-400 uppercase tracking-widest"
                 >
                   No tracking records discovered matching selection filters.
@@ -2136,7 +2148,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               </tr>
             )}
             <tr>
-              <td colSpan={columns.length + 2} className="px-6 py-3">
+              <td colSpan={columns.length + (isTableHovered ? 2 : 1)} className="px-6 py-3">
                 <div className="flex justify-center">
                   <button
                     type="button"
