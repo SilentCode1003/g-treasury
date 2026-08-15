@@ -358,8 +358,6 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     onVatModeChange,
     quantityMode = false,
     onQuantityModeChange,
-    serviceQuantitySelection = {},
-    onServiceQuantityChange,
     includeDrNo = true,
     onToggleDrNo,
     includeRtNo = true,
@@ -656,7 +654,6 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   const [selectedColumnKey, setSelectedColumnKey] = useState('All')
   const [selectedColumnValue, setSelectedColumnValue] = useState('All')
-  const [isTableHovered, setIsTableHovered] = useState(false)
   const [addPartRowVisible, setAddPartRowVisible] = useState(null)
   const [addPartRowHiding, setAddPartRowHiding] = useState(null)
   const [qtyPanelOpen, setQtyPanelOpen] = useState(false)
@@ -1226,21 +1223,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                         const serviceKey = normalizeHeaderKey(
                           column.serviceMeta?.serviceKey || column.key,
                         )
-                        const isSelected = Boolean(serviceQuantitySelection?.[serviceKey])
 
                         return (
                           <label
                             key={serviceKey}
                             className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-200"
                           >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(event) =>
-                                onServiceQuantityChange?.(serviceKey, event.target.checked)
-                              }
-                              className="h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 text-red-500 focus:ring-red-500"
-                            />
                             <span>{column.header}</span>
                           </label>
                         )
@@ -1292,7 +1280,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       </div>
 
       <div className="overflow-x-auto lg:flex-1 lg:overflow-y-auto">
-        <table className="w-full text-center border-collapse relative" onMouseEnter={() => setIsTableHovered(true)} onMouseLeave={() => setIsTableHovered(false)}>
+        <table className="w-full text-center border-collapse relative">
           <thead>
             <tr className="border-b border-gray-100 bg-red-600 text-white text-[9px] font-bold uppercase tracking-widest">
               {columns.map((col, idx) => (
@@ -1303,11 +1291,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                   {typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
                 </th>
               ))}
-              {isTableHovered && (
-                <th className="sticky top-0 z-10 bg-red-600 w-16 px-3 py-3">
-                  <span className="text-[9px] font-bold uppercase tracking-widest">Color</span>
-                </th>
-              )}
+              <th className="sticky top-0 z-10 bg-red-600 w-16 px-3 py-3">
+                <span className="text-[9px] font-bold uppercase tracking-widest">Action</span>
+              </th>
             </tr>
           </thead>
           <tbody className="group divide-y divide-gray-100 text-xs font-medium text-gray-700">
@@ -1427,23 +1413,54 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                         </div>
                                       )
                                     ) : isNumberField ? (
-                                      <input
-                                        type="number"
-                                        inputMode="numeric"
-                                        min="0"
-                                        step="1"
-                                        value={String(currentValue ?? '').replace(/\.0+$/, '')}
-                                        onChange={(e) => {
-                                          const nextValue = e.target.value.replace(/[^0-9]/g, '')
-                                          handleCellChange(
-                                            row.id,
-                                            col.key,
-                                            nextValue === '' ? 0 : Number(nextValue),
-                                          )
-                                        }}
-                                        className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
-                                        placeholder="0"
-                                      />
+                                      <div className="relative">
+                                        <input
+                                          type="text"
+                                          step="1"
+                                          value={String(currentValue ?? '').replace(/\.0+$/, '')}
+                                          onChange={(e) => {
+                                            const nextValue = e.target.value.replace(/[^0-9]/g, '')
+                                            handleCellChange(
+                                              row.id,
+                                              col.key,
+                                              nextValue === '' ? 0 : Number(nextValue),
+                                            )
+                                            setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                          }}
+                                          onFocus={() => setActiveStoreDropdown(`${row.id}-${col.key}`)}
+                                          onBlur={() => {
+                                            setTimeout(() => setActiveStoreDropdown(null), 200)
+                                          }}
+                                          className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                          placeholder="Store no."
+                                        />
+                                        {activeStoreDropdown === `${row.id}-${col.key}` && filteredStores(currentValue).length > 0 && (
+                                          <div 
+                                            className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                          >
+                                            {filteredStores(currentValue).map((store) => (
+                                              <button
+                                                key={store.store_id}
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.preventDefault()
+                                                  handleCellChange(row.id, col.key, store.number)
+                                                  // Auto-fill store name if column exists
+                                                  const storeNameCol = columns.find((c) => String(c.header || '').toUpperCase() === 'STORE NAME' || String(c.header || '').toUpperCase() === 'STORENAME')
+                                                  if (storeNameCol) {
+                                                    handleCellChange(row.id, storeNameCol.key, store.name)
+                                                  }
+                                                  setActiveStoreDropdown(null)
+                                                }}
+                                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                              >
+                                                {store.number} - {store.name}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
                                     ) : isNameField ? (
                                       <div className="relative">
                                         <input
@@ -1667,7 +1684,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                               
                               return <td key={col.key} className="px-6 py-3"></td>
                             })}
-                            {isFirstPart && isTableHovered && (
+                            {isFirstPart && (
                               <td rowSpan={partsCount} className="w-16 px-2 py-2">
                                 <div className="flex items-center gap-1">
                                   <div className="relative">
@@ -1770,6 +1787,55 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                 <span className="block rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">
                                   {rowIdx + 1}
                                 </span>
+                              ) : isNumberField ? (
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    step="1"
+                                    value={String(currentValue ?? '').replace(/\.0+$/, '')}
+                                    onChange={(e) => {
+                                      const nextValue = e.target.value.replace(/[^0-9]/g, '')
+                                      handleCellChange(
+                                        row.id,
+                                        col.key,
+                                        nextValue === '' ? 0 : Number(nextValue),
+                                      )
+                                      setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                    }}
+                                    onFocus={() => setActiveStoreDropdown(`${row.id}-${col.key}`)}
+                                    onBlur={() => {
+                                      setTimeout(() => setActiveStoreDropdown(null), 200)
+                                    }}
+                                    className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                    placeholder="Store no."
+                                  />
+                                  {activeStoreDropdown === `${row.id}-${col.key}` && filteredStores(currentValue).length > 0 && (
+                                    <div 
+                                      className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                    >
+                                      {filteredStores(currentValue).map((store) => (
+                                        <button
+                                          key={store.store_id}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault()
+                                            handleCellChange(row.id, col.key, store.number)
+                                            // Auto-fill store name if column exists
+                                            const storeNameCol = columns.find((c) => String(c.header || '').toUpperCase() === 'STORE NAME' || String(c.header || '').toUpperCase() === 'STORENAME')
+                                            if (storeNameCol) {
+                                              handleCellChange(row.id, storeNameCol.key, store.name)
+                                            }
+                                            setActiveStoreDropdown(null)
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                        >
+                                          {store.number} - {store.name}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               ) : isAreaField ? (
                                 loadingCities ? (
                                   <input
@@ -2002,8 +2068,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           }}
                                           className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
                                         >
-                                          <div className="font-semibold">{store.name}</div>
-                                          <div className="text-[10px] text-gray-500">{store.number}</div>
+                                          {store.number} - {store.name}
                                         </button>
                                       ))}
                                     </div>
@@ -2050,8 +2115,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                             </td>
                           )
                         })}
-                        {isTableHovered && (
-                          <td className="w-16 px-2 py-2">
+                        <td className="w-16 px-2 py-2">
                             <div className="flex items-center gap-1">
                               <div className="relative">
                                 <button
@@ -2114,8 +2178,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                               </button>
                             </div>
                           </td>
-                        )}
-                      </tr>
+                        </tr>
                     )}
                     {hasPartsColumns && (addPartRowVisible === row.id || addPartRowHiding === row.id) && (
                       <tr 
@@ -2124,7 +2187,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                         onMouseLeave={() => handleRowMouseLeave()}
                         className={`add-part-row ${addPartRowVisible === row.id ? 'visible' : addPartRowHiding === row.id ? 'hiding' : ''}`}
                       >
-                        <td colSpan={columns.length + (isTableHovered ? 2 : 1)} className="px-6 py-2 bg-gray-50">
+                        <td colSpan={columns.length + 1} className="px-6 py-2 bg-gray-50">
                           <button
                             onClick={() => addPart(row.id)}
                             className="inline-flex items-center rounded border border-green-200 bg-green-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
@@ -2140,7 +2203,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
             ) : (
               <tr>
                 <td
-                  colSpan={columns.length + (isTableHovered ? 2 : 1)}
+                  colSpan={columns.length + 1}
                   className="px-6 py-12 text-center text-xs font-medium text-gray-400 uppercase tracking-widest"
                 >
                   No tracking records discovered matching selection filters.
@@ -2148,7 +2211,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               </tr>
             )}
             <tr>
-              <td colSpan={columns.length + (isTableHovered ? 2 : 1)} className="px-6 py-3">
+              <td colSpan={columns.length + 1} className="px-6 py-3">
                 <div className="flex justify-center">
                   <button
                     type="button"
@@ -2738,7 +2801,6 @@ export default function StatementDetails() {
   const [initialRows, setInitialRows] = useState([])
   const [vatPerRow, setVatPerRow] = useState(false)
   const [quantityMode, setQuantityMode] = useState('off')
-  const [serviceQuantitySelection, setServiceQuantitySelection] = useState({})
   const [includeDrNo, setIncludeDrNo] = useState(true)
   const [includeRtNo, setIncludeRtNo] = useState(true)
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
@@ -2825,22 +2887,6 @@ export default function StatementDetails() {
       const statementData = response.data?.data || null
       setStatement(statementData)
       
-      // Load service quantity selection from saved statement
-      if (statementData?.soa_service_quantity_selection) {
-        try {
-          const parsedSelection = typeof statementData.soa_service_quantity_selection === 'string' 
-            ? JSON.parse(statementData.soa_service_quantity_selection) 
-            : statementData.soa_service_quantity_selection
-          setServiceQuantitySelection(parsedSelection || {})
-          if (Object.keys(parsedSelection || {}).length > 0) {
-            setQuantityMode('add')
-          }
-        } catch (err) {
-          console.error('Error parsing service quantity selection:', err)
-          setServiceQuantitySelection({})
-        }
-      }
-      
       // load saved items for this statement (if any)
       try {
         const itemsResp = await apiClient.get(`/statement/${statementId}/items`)
@@ -2918,7 +2964,6 @@ export default function StatementDetails() {
         })
       const useQuantity = Boolean(
         options.quantityMode ||
-        Object.values(serviceQuantitySelection).some(Boolean) ||
         columns.some((column) => isQuantityColumn(column)),
       )
       const sanitizedRows = rows.map((row) => {
@@ -2968,7 +3013,6 @@ export default function StatementDetails() {
                 }
               : null,
           })),
-        serviceQuantitySelection: serviceQuantitySelection,
       })
 
       if (response.data?.success) {
@@ -3009,19 +3053,8 @@ export default function StatementDetails() {
     return map
   }, [companies])
 
-  const handleServiceQuantityChange = (serviceKey, enabled) => {
-    const normalized = normalizeHeaderKey(serviceKey)
-    setServiceQuantitySelection((current) => ({
-      ...current,
-      [normalized]: Boolean(enabled),
-    }))
-  }
-
   const handleQuantityModeChange = (enabled) => {
     setQuantityMode(enabled ? 'add' : 'off')
-    // Turning "Add Qty" on/off never pre-selects any service — the user
-    // must explicitly check which service(s) need a QTY column.
-    setServiceQuantitySelection({})
   }
 
   // Column color management functions
@@ -3185,11 +3218,8 @@ export default function StatementDetails() {
       return candidate
     }
 
-    // Quantity columns are derived EXCLUSIVELY from the per-service
-    // checkbox selection below (serviceQuantitySelection). Legacy header
-    // entries like "Qty (Renovation)" or a bare "Qty"/"Quantity" are
-    // ignored here entirely — they used to be a second, independent path
-    // that could add a duplicate QTY column alongside the checkbox path.
+    // Quantity columns are derived from legacy header entries
+    // like "Qty (Renovation)" or a bare "Qty"/"Quantity".
     rawHeaders
       .filter((headerText) => {
         const normalizedHeader = String(typeof headerText === 'object' ? (headerText.header || headerText.key || headerText) : headerText).trim().toLowerCase()
@@ -3230,10 +3260,8 @@ export default function StatementDetails() {
             : null,
         })
 
-        // Add exactly one QTY column for this service, and only when the
-        // user has checked its box in the "Add Qty" panel.
-        const isQtyCheckedForThisService =
-          quantityMode === 'add' && Boolean(serviceQuantitySelection?.[serviceKey])
+        // Add QTY column for this service when quantity mode is enabled
+        const isQtyCheckedForThisService = quantityMode === 'add'
 
         if (serviceMatch && isQtyCheckedForThisService) {
           columns.push({
@@ -3249,7 +3277,7 @@ export default function StatementDetails() {
       })
 
     return columns
-  }, [services, statement?.soa_headers, serviceQuantitySelection, quantityMode])
+  }, [services, statement?.soa_headers, quantityMode])
 
   const visibleTableColumns = useMemo(() => {
     const baseColumns = dynamicTableColumns
@@ -3317,16 +3345,16 @@ export default function StatementDetails() {
   // silently get re-checked (and thus a duplicate QTY column) any time the
   // header list changed.
   useEffect(() => {
-    if (savedQuantitySelection.size > 0) {
-      const seeded = Array.from(savedQuantitySelection).reduce((acc, key) => {
-        acc[key] = true
-        return acc
-      }, {})
-      setQuantityMode('add')
-      setServiceQuantitySelection(seeded)
-    } else {
-      setQuantityMode('off')
-      setServiceQuantitySelection({})
+    if (!statementId) return
+
+    const savedQuantitySelection = localStorage.getItem(`qty_selection_${statementId}`)
+    if (savedQuantitySelection) {
+      try {
+        const seeded = JSON.parse(savedQuantitySelection)
+        setQuantityMode('add')
+      } catch (err) {
+        setQuantityMode('off')
+      }
     }
   }, [statementId, savedQuantitySelection])
 
@@ -3579,8 +3607,6 @@ export default function StatementDetails() {
             onVatModeChange={setVatPerRow}
             quantityMode={quantityMode === 'add'}
             onQuantityModeChange={handleQuantityModeChange}
-            serviceQuantitySelection={serviceQuantitySelection}
-            onServiceQuantityChange={handleServiceQuantityChange}
             includeDrNo={includeDrNo}
             onToggleDrNo={handleToggleDrNo}
             includeRtNo={includeRtNo}

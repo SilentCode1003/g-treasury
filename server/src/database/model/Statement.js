@@ -15,7 +15,6 @@ const Statement = {
       'prepared_by',
       'statement_type',
       'maintenance_format',
-      'service_quantity_selection',
     ],
     selectColumns: [
       'soa_id',
@@ -30,7 +29,6 @@ const Statement = {
       'soa_prepared_by',
       'soa_statement_type',
       'soa_maintenance_format',
-      'soa_service_quantity_selection',
     ],
     selectOptionColumns: {
       id: 'soa_id',
@@ -45,7 +43,6 @@ const Statement = {
       prepared_by: 'soa_prepared_by',
       statement_type: 'soa_statement_type',
       maintenance_format: 'soa_maintenance_format',
-      service_quantity_selection: 'soa_service_quantity_selection',
     },
     updateOptionColumns: {
       id: 'id',
@@ -60,7 +57,6 @@ const Statement = {
       prepared_by: 'prepared_by',
       statement_type: 'statement_type',
       maintenance_format: 'maintenance_format',
-      service_quantity_selection: 'service_quantity_selection',
     },
     selectDateFormatColumns: {},
     selectMiscColumns: {},
@@ -77,7 +73,6 @@ const Statement = {
       prepared_by: 'STRING',
       statement_type: 'ENUM',
       maintenance_format: 'ENUM',
-      service_quantity_selection: 'JSON',
     },
   },
   statement_items: {
