@@ -513,9 +513,10 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   }
 
   const filteredStores = (searchTerm) => {
-    if (!searchTerm || searchTerm.trim() === '') return stores.slice(0, 20)
-    return stores.filter((store) => 
-      String(store.name).toLowerCase().includes(String(searchTerm).toLowerCase())
+    const searchStr = String(searchTerm || '')
+    if (!searchStr || searchStr.trim() === '') return stores.slice(0, 20)
+    return stores.filter((store) =>
+      String(store.name).toLowerCase().includes(searchStr.toLowerCase())
     ).slice(0, 20)
   }
 
