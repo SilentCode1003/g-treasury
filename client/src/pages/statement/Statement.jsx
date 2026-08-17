@@ -19,7 +19,12 @@ const normalizeServiceId = (service) => String(service?.service_id ?? service?.i
 
 const normalizeStoredHeaders = (headers = []) => {
   if (Array.isArray(headers)) {
-    return headers.map((header) => String(header ?? '').trim()).filter(Boolean)
+    return headers.map((header) => {
+      if (typeof header === 'object') {
+        return String(header.header || header.key || header).trim()
+      }
+      return String(header ?? '').trim()
+    }).filter(Boolean)
   }
 
   if (typeof headers === 'string') {
@@ -29,7 +34,12 @@ const normalizeStoredHeaders = (headers = []) => {
     try {
       const parsed = JSON.parse(trimmed)
       if (Array.isArray(parsed)) {
-        return parsed.map((header) => String(header ?? '').trim()).filter(Boolean)
+        return parsed.map((header) => {
+          if (typeof header === 'object') {
+            return String(header.header || header.key || header).trim()
+          }
+          return String(header ?? '').trim()
+        }).filter(Boolean)
       }
     } catch {
       // fall back to comma-splitting below
@@ -90,12 +100,15 @@ const buildHeadersFromServices = (
 
   const includeDrNo = options.includeDrNo !== false
   const includeRtNo = options.includeRtNo !== false
+  const includeMaterialCost = options.includeMaterialCost !== false
   const staticHeaderStart = ['NO.']
   if (includeDrNo) staticHeaderStart.push('DR NO.')
   if (includeRtNo) staticHeaderStart.push('RT NO.')
   staticHeaderStart.push('STORE NAME', 'STORE NO.', 'DATE')
   const serviceIds = selected.map((service) => normalizeServiceId(service))
-  const staticHeaderEnd = ['MATERIAL COST', 'SALES', 'ADDITIONAL SALES (MOBILIZATION)', 'TOTAL SALES']
+  const staticHeaderEnd = []
+  if (includeMaterialCost) staticHeaderEnd.push('MATERIAL COST')
+  staticHeaderEnd.push('SALES', 'ADDITIONAL SALES (MOBILIZATION)', 'TOTAL SALES')
   const headers = [...staticHeaderStart, ...serviceIds, ...staticHeaderEnd]
   const normalizedExistingHeaders = normalizeStoredHeaders(existingHeaders)
   const hasVatHeader = normalizedExistingHeaders.some(
@@ -153,6 +166,7 @@ export default function Statement() {
     total: '',
     includeDrNo: true,
     includeRtNo: true,
+    includeMaterialCost: true,
     statement_type: 'SERVICE',
     maintenance_format: 'REGIONAL_SUMMARY',
   })
@@ -224,6 +238,7 @@ export default function Statement() {
         .replace(/[^a-z0-9]/g, '')
     const hasDrNo = normalizedRowHeaders.some((header) => normalizeHeaderKey(header) === 'drno')
     const hasRtNo = normalizedRowHeaders.some((header) => normalizeHeaderKey(header) === 'rtno')
+    const hasMaterialCost = normalizedRowHeaders.some((header) => normalizeHeaderKey(header) === 'materialcost')
 
     setEditForm({
       id: row.id,
@@ -235,6 +250,7 @@ export default function Statement() {
       existingHeaders: row.headers ?? null,
       includeDrNo: hasDrNo,
       includeRtNo: hasRtNo,
+      includeMaterialCost: hasMaterialCost,
       statement_type: row.statement_type || 'SERVICE',
       maintenance_format: row.maintenance_format || 'REGIONAL_SUMMARY',
     })
@@ -251,6 +267,7 @@ export default function Statement() {
         headers = buildHeadersFromServices(form.services, services, [], {
           includeDrNo: form.includeDrNo,
           includeRtNo: form.includeRtNo,
+          includeMaterialCost: form.includeMaterialCost,
         })
         title = form.title || generatedTitle
       } else {
@@ -302,6 +319,7 @@ export default function Statement() {
         total: '',
         includeDrNo: true,
         includeRtNo: true,
+        includeMaterialCost: true,
         statement_type: 'SERVICE',
         maintenance_format: 'REGIONAL_SUMMARY',
       })
@@ -333,6 +351,7 @@ export default function Statement() {
           {
             includeDrNo: editForm.includeDrNo,
             includeRtNo: editForm.includeRtNo,
+            includeMaterialCost: editForm.includeMaterialCost,
           },
         )
         title = editForm.title || buildGeneratedTitle(editForm.services || [], services)
@@ -724,7 +743,7 @@ export default function Statement() {
           </div>
           )}
           {form.statement_type === 'SERVICE' && (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <label className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 text-sm">
               <input
                 type="checkbox"
@@ -740,6 +759,14 @@ export default function Statement() {
                 onChange={(e) => setForm((prev) => ({ ...prev, includeRtNo: e.target.checked }))}
               />
               <span className="text-sm text-gray-700">Include RT NO.</span>
+            </label>
+            <label className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.includeMaterialCost}
+                onChange={(e) => setForm((prev) => ({ ...prev, includeMaterialCost: e.target.checked }))}
+              />
+              <span className="text-sm text-gray-700">Include Material Cost</span>
             </label>
           </div>
           )}
@@ -924,7 +951,7 @@ export default function Statement() {
             </div>
             )}
             {editForm.statement_type === 'SERVICE' && (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <label className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 text-sm">
                 <input
                   type="checkbox"
@@ -940,6 +967,14 @@ export default function Statement() {
                   onChange={(e) => setEditForm((prev) => ({ ...prev, includeRtNo: e.target.checked }))}
                 />
                 <span className="text-sm text-gray-700">Include RT NO.</span>
+              </label>
+              <label className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={editForm.includeMaterialCost}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, includeMaterialCost: e.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Include Material Cost</span>
               </label>
             </div>
             )}

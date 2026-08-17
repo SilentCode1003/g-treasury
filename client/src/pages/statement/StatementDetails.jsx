@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useImperativeHandle } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useImperativeHandle, useCallback } from 'react'
 import { ChevronLeft, Trash2, Palette } from 'lucide-react'
 import { useLocation, useMatch, useNavigate } from '@tanstack/react-router'
 import Layout from '../components/Layout'
@@ -373,6 +373,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     onToggleDrNo,
     includeRtNo = true,
     onToggleRtNo,
+    includeMaterialCost = true,
+    onToggleMaterialCost,
+    onAutoSave,
   },
   ref,
 ) {
@@ -385,6 +388,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     }
     return [{ id: 'row-1', values: {}, color: null }]
   })
+
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    getRows: () => rows,
+    getColumns: () => columns,
+  }), [rows, columns])
 
   // Sync rows with initialRows when initialRows changes (e.g., after save)
   useEffect(() => {
@@ -402,9 +411,14 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
   // Row color management functions
   const handleRowColorChange = (rowId, color) => {
-    setRows(prevRows => prevRows.map(row =>
-      row.id === rowId ? { ...row, color } : row
-    ))
+    setRows(prevRows => {
+      const updated = prevRows.map(row =>
+        row.id === rowId ? { ...row, color } : row
+      )
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
     setShowColorPicker(null)
   }
 
@@ -415,9 +429,14 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   }
 
   const handleRowColorRemove = (rowId) => {
-    setRows(prevRows => prevRows.map(row =>
-      row.id === rowId ? { ...row, color: null } : row
-    ))
+    setRows(prevRows => {
+      const updated = prevRows.map(row =>
+        row.id === rowId ? { ...row, color: null } : row
+      )
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
   }
 
   // Close color picker when clicking outside
@@ -803,8 +822,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   }
 
   const handleStoreFieldChange = (rowId, columnKey, value, fieldType) => {
-    setRows((currentRows) =>
-      currentRows.map((row) => {
+    setRows((currentRows) => {
+      const updated = currentRows.map((row) => {
         if (row.id !== rowId) return row
 
         const nextValues = {
@@ -834,14 +853,17 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           ...row,
           values: nextValues,
         }
-      }),
-    )
+      })
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
   }
 
   const handleStoreSelect = (rowId, store, columnKey, fieldType) => {
     const relatedKey = getRelatedStoreKey(columnKey, fieldType)
-    setRows((currentRows) =>
-      currentRows.map((row) => {
+    setRows((currentRows) => {
+      const updated = currentRows.map((row) => {
         if (row.id !== rowId) return row
 
         const nextValues = {
@@ -855,8 +877,11 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           ...row,
           values: nextValues,
         }
-      }),
-    )
+      })
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
     clearStoreDropdownBlurTimer()
     setActiveStoreDropdown({ rowId: null, fieldKey: null })
   }
@@ -878,8 +903,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const handleServiceToggle = (rowId, columnKey, checked, serviceMeta) => {
     if (!serviceMeta) return
 
-    setRows((currentRows) =>
-      currentRows.map((row) => {
+    setRows((currentRows) => {
+      const updated = currentRows.map((row) => {
         if (row.id !== rowId) return row
 
         const nextValues = {
@@ -924,8 +949,11 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           ...row,
           values: nextValues,
         }
-      }),
-    )
+      })
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
     clearStoreDropdownBlurTimer()
     setActiveStoreDropdown({ rowId: null, fieldKey: null })
   }
@@ -951,7 +979,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const handleAddRow = () => {
     const serviceTypeCol = columns.find((col) => String(col.header || '').toUpperCase() === 'SERVICE TYPE')
     const workDoneCol = columns.find((col) => String(col.header || '').toUpperCase() === 'WORK DONE')
-    
+
     const newValues = {}
     if (serviceTypeCol) {
       newValues[serviceTypeCol.key] = 'MAINTENANCE'
@@ -959,12 +987,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     if (workDoneCol) {
       newValues[workDoneCol.key] = 'REPAIR AND MAINTENANCE'
     }
-    
+
     const newRow = {
       id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       values: newValues,
     }
-    
+
     // Initialize parts array if table has parts columns
     if (hasPartsColumns) {
       newRow.parts = [{
@@ -972,19 +1000,21 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 }
       }]
     }
-    
-    setRows((currentRows) => [
-      ...currentRows,
-      newRow,
-    ])
+
+    setRows((currentRows) => {
+      const updated = [...currentRows, newRow]
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
     setSelectedColumnKey('All')
     setSelectedColumnValue('All')
     setLocalSearchQuery('')
   }
 
   const handleCellChange = (rowId, columnKey, value) => {
-    setRows((currentRows) =>
-      currentRows.map((row) => {
+    setRows((currentRows) => {
+      const updated = currentRows.map((row) => {
         if (row.id !== rowId) return row
 
         const changedColumn = columns.find((col) => col.key === columnKey)
@@ -997,7 +1027,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         const noOfStoreCol = columns.find((col) => String(col.header || '').toUpperCase() === 'NO OF STORE')
         const pricePerStoreCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PRICE PER STORE')
         const totalAmountCol = columns.find((col) => String(col.header || '').toUpperCase() === 'TOTAL AMOUNT')
-        
+
         if (noOfStoreCol && pricePerStoreCol && totalAmountCol) {
           if (columnKey === noOfStoreCol.key || columnKey === pricePerStoreCol.key) {
             const noOfStore = Number(nextValues[noOfStoreCol.key] || 0)
@@ -1010,22 +1040,13 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         const amountPerStoreCol = columns.find((col) => String(col.header || '').toUpperCase() === 'AMOUNT PER STORE')
         const totalVatExCol = columns.find((col) => String(col.header || '').toUpperCase() === 'TOTAL VAT-EX')
         const totalVatInCol = columns.find((col) => String(col.header || '').toUpperCase() === 'TOTAL VAT-IN')
-        
-        if (noOfStoreCol && amountPerStoreCol && totalVatExCol) {
-          if (columnKey === noOfStoreCol.key || columnKey === amountPerStoreCol.key) {
-            const noOfStore = Number(nextValues[noOfStoreCol.key] || 0)
+
+        if (amountPerStoreCol && totalVatExCol && totalVatInCol) {
+          if (columnKey === amountPerStoreCol.key) {
+            const noOfStore = Number(nextValues[noOfStoreCol?.key] || 0)
             const amountPerStore = Number(nextValues[amountPerStoreCol.key] || 0)
             nextValues[totalVatExCol.key] = noOfStore * amountPerStore
-          }
-        }
-        
-        if (noOfStoreCol && amountPerStoreCol && totalVatInCol) {
-          if (columnKey === noOfStoreCol.key || columnKey === amountPerStoreCol.key) {
-            const noOfStore = Number(nextValues[noOfStoreCol.key] || 0)
-            const amountPerStore = Number(nextValues[amountPerStoreCol.key] || 0)
-            const totalVatEx = noOfStore * amountPerStore
-            // TOTAL VAT-IN includes 12% VAT
-            nextValues[totalVatInCol.key] = totalVatEx * 1.12
+            nextValues[totalVatInCol.key] = noOfStore * amountPerStore * 1.12
           }
         }
 
@@ -1034,7 +1055,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         const partsQtyCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PARTS QTY.')
         const priceCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PRICE')
         const subtotalCol = columns.find((col) => String(col.header || '').toUpperCase() === 'SUBTOTAL')
-        
+
         if (partsDescCol && partsQtyCol && columnKey === partsDescCol.key) {
           if (!value || value.trim() === '') {
             nextValues[partsQtyCol.key] = 0
@@ -1097,50 +1118,32 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           }
         }
 
-        if (
-          changedColumn &&
-          (isSalesColumn(changedColumn) || isAdditionalSalesColumn(changedColumn))
-        ) {
-          // When additional sales changes, don't affect the sales column
-          // Sales column should only contain service sum
-          if (isAdditionalSalesColumn(changedColumn) && salesColumnKey) {
-            // Recalculate service sum for sales column
-            const serviceColumns = columns.filter((col) => col?.serviceMeta && !isQuantityColumn(col))
-            const serviceSum = serviceColumns.reduce((sum, col) => {
-              const price = Number(col.serviceMeta?.servicePrice || 0)
-              const quantityColumn = columns.find(
-                (candidate) =>
-                  isQuantityColumn(candidate) &&
-                  String(candidate?.quantityMeta?.relatedServiceKey || '').toLowerCase() ===
-                    String(col.key || '').toLowerCase(),
-              )
-              const quantityValue = parseDecimalInput(nextValues?.[quantityColumn?.key])
-              const isSelected = Boolean(nextValues?.[col.key]) || quantityValue > 0
-
-              if (!isSelected) return sum
-
-              const effectiveQuantity = quantityColumn ? Math.max(quantityValue, 0) : 1
-              return Number((sum + price * effectiveQuantity).toFixed(2))
-            }, 0)
-            nextValues[salesColumnKey] = serviceSum
-          }
-          if (vatPerRow) {
-            nextValues.vat = getComputedVatValue(computedTotal)
-          } else {
-            nextValues.vat = 0
-          }
+        // Auto-compute VAT if vatPerRow is enabled
+        if (vatPerRow) {
+          const computedVat = getComputedVatValue(computedTotal)
+          nextValues.vat = computedVat
+        } else {
+          nextValues.vat = 0
         }
 
         return {
           ...row,
           values: nextValues,
         }
-      }),
-    )
+      })
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
   }
 
   const handleDeleteRow = (rowId) => {
-    setRows((currentRows) => currentRows.filter((row) => row.id !== rowId))
+    setRows((currentRows) => {
+      const updated = currentRows.filter((row) => row.id !== rowId)
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(updated, columns), 0)
+      return updated
+    })
   }
 
   const handleDragStart = (event, rowId) => {
@@ -1166,6 +1169,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       const nextRows = [...currentRows]
       const [moved] = nextRows.splice(fromIndex, 1)
       nextRows.splice(toIndex, 0, moved)
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(nextRows, columns), 0)
       return nextRows
     })
   }
@@ -1181,7 +1186,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     // Also reorder the actual rows array so the sort persists on save
     setRows((currentRows) => {
       const newDirection = sortColumn === columnKey ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc'
-      return [...currentRows].sort((a, b) => {
+      const sorted = [...currentRows].sort((a, b) => {
         const aValue = a.values?.[columnKey]
         const bValue = b.values?.[columnKey]
 
@@ -1196,6 +1201,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
         return newDirection === 'asc' ? comparison : -comparison
       })
+      // Defer auto-save to avoid setState during render
+      setTimeout(() => onAutoSave?.(sorted, columns), 0)
+      return sorted
     })
   }
 
@@ -1205,11 +1213,14 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     // Also reorder the actual rows array so the grouping persists on save
     if (checked) {
       setRows((currentRows) => {
-        return [...currentRows].sort((a, b) => {
+        const sorted = [...currentRows].sort((a, b) => {
           const aColor = a.color || 'none'
           const bColor = b.color || 'none'
           return aColor.localeCompare(bColor)
         })
+        // Defer auto-save to avoid setState during render
+        setTimeout(() => onAutoSave?.(sorted, columns), 0)
+        return sorted
       })
     }
   }
@@ -1333,6 +1344,16 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                 />
                 <span className="text-xs">RT NO.</span>
               </label>
+
+              <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={includeMaterialCost}
+                  onChange={(e) => onToggleMaterialCost?.(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-red-500 focus:ring-red-500"
+                />
+                <span className="text-xs">Material Cost</span>
+              </label>
             </>
           )}
           
@@ -1439,7 +1460,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           <select
             value={selectedColumnKey}
             onChange={handleColumnKeyChange}
-            className="bg-white text-xs text-gray-800 rounded border border-gray-300 px-2 py-1.5 font-medium shadow-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer"
+            className="bg-white text-xs text-gray-800 rounded border border-gray-300 px-2 py-1.5 font-medium shadow-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer w-40"
           >
             <option value="All">Filter By Column...</option>
             {columns.map(
@@ -1452,19 +1473,20 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
             )}
           </select>
 
-          <select
-            value={selectedColumnValue}
-            onChange={(e) => setSelectedColumnValue(e.target.value)}
-            disabled={selectedColumnKey === 'All'}
-            className="bg-white text-xs text-gray-800 rounded border border-gray-300 px-2 py-1.5 font-medium shadow-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
-          >
-            <option value="All">All Unique Values</option>
-            {uniqueColumnValues.map((value, index) => (
-              <option key={index} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
+          {selectedColumnKey !== 'All' && (
+            <select
+              value={selectedColumnValue}
+              onChange={(e) => setSelectedColumnValue(e.target.value)}
+              className="bg-white text-xs text-gray-800 rounded border border-gray-300 px-2 py-1.5 font-medium shadow-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer"
+            >
+              <option value="All">All Unique Values</option>
+              {uniqueColumnValues.map((value, index) => (
+                <option key={index} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -2996,19 +3018,76 @@ export default function StatementDetails() {
   const [error, setError] = useState('')
   const [toast, setToast] = useState(null)
   const [savingRows, setSavingRows] = useState(false)
+  const [autoSaving, setAutoSaving] = useState(false)
   const [initialRows, setInitialRows] = useState([])
   const [vatPerRow, setVatPerRow] = useState(false)
   const [quantityMode, setQuantityMode] = useState('off')
   const [includeDrNo, setIncludeDrNo] = useState(true)
   const [includeRtNo, setIncludeRtNo] = useState(true)
+  const [includeMaterialCost, setIncludeMaterialCost] = useState(true)
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
   const [pdfBlob, setPdfBlob] = useState(null)
   const [showSubtotal, setShowSubtotal] = useState(true)
   const [showVat, setShowVat] = useState(true)
   const [showTotal, setShowTotal] = useState(true)
   const tableRef = useRef(null)
+  const autoSaveTimerRef = useRef(null)
   const [liveMeta, setLiveMeta] = useState({ subTotal: 0, vat: 0, total: 0 })
-  
+
+  // Auto-save functionality
+  const triggerAutoSave = useCallback((currentRows, currentColumns) => {
+    console.log('Auto-save triggered', { currentRows, currentColumns })
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+    }
+
+    setAutoSaving(true)
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const rowsToSave = currentRows || tableRef.current?.getRows?.() || []
+        const columnsToSave = currentColumns || tableRef.current?.getColumns?.() || []
+
+        // Calculate totals from current rows to ensure we save the latest values
+        const subTotal = rowsToSave.reduce((sum, r) => {
+          if (r.parts && r.parts.length > 0) {
+            const partsSum = r.parts.reduce((partSum, part) => {
+              return partSum + (part.values?.subtotal || 0)
+            }, 0)
+            return sum + partsSum
+          }
+          return sum + getComputedSalesTotal(r.values, columnsToSave)
+        }, 0)
+        const vat = vatPerRow
+          ? rowsToSave.reduce((sum, r) => sum + getComputedVatValue(
+              r.parts && r.parts.length > 0
+                ? r.parts.reduce((partSum, part) => partSum + (part.values?.subtotal || 0), 0)
+                : getComputedSalesTotal(r.values, columnsToSave)
+            ), 0)
+          : Number((subTotal * 0.12).toFixed(2))
+        const total = Number((subTotal + vat).toFixed(2))
+
+        // Update liveMeta with the calculated totals
+        setLiveMeta({ subTotal, vat, total })
+
+        console.log('Auto-save executing', { rowsToSave, columnsToSave, subTotal, vat, total })
+        if (rowsToSave.length > 0 && columnsToSave.length > 0) {
+          await handleSaveRows(rowsToSave, columnsToSave, {
+            vatMode: vatPerRow,
+            quantityMode: quantityMode === 'add',
+            soa_sub_total: subTotal,
+            soa_vat: vat,
+            soa_total: total,
+          }, true) // isAutoSave = true for silent save
+          console.log('Auto-save completed successfully')
+        }
+      } catch (err) {
+        console.error('Auto-save failed:', err)
+      } finally {
+        setAutoSaving(false)
+      }
+    }, 1500) // Debounce for 1.5 seconds
+  }, [vatPerRow, quantityMode])
+
   // Column color management
   const [columnColors, setColumnColors] = useState({})
   const [showColorPicker, setShowColorPicker] = useState(null) // Store column key for which picker is open
@@ -3137,17 +3216,18 @@ export default function StatementDetails() {
         }
       }
 
-      const { hasDrNo, hasRtNo } = parseExistingHeaderFlags(rawHeaders)
+      const { hasDrNo, hasRtNo, hasMaterialCost } = parseExistingHeaderFlags(rawHeaders)
       setIncludeDrNo(hasDrNo)
       setIncludeRtNo(hasRtNo)
+      setIncludeMaterialCost(hasMaterialCost)
     }
   }, [statement?.soa_headers])
 
-  const handleSaveRows = async (rows = [], columns = [], options = {}) => {
+  const handleSaveRows = async (rows = [], columns = [], options = {}, isAutoSave = false) => {
     if (!statementId) return
 
     try {
-      setSavingRows(true)
+      if (!isAutoSave) setSavingRows(true)
       
       const fieldNames = columns
         .filter((column) => column.key !== 'vat')
@@ -3224,7 +3304,9 @@ export default function StatementDetails() {
       })
 
       if (response.data?.success) {
-        showToast('success', response.data?.message || 'Statement rows saved successfully.')
+        if (!isAutoSave) {
+          showToast('success', response.data?.message || 'Statement rows saved successfully.')
+        }
         setStatement((currentStatement) =>
           currentStatement
             ? {
@@ -3244,10 +3326,12 @@ export default function StatementDetails() {
       console.error('Error response:', err?.response)
       console.error('Error data:', err?.response?.data)
       const message = err?.response?.data?.message || err?.message || 'Unable to save statement rows at this time.'
-      showToast('error', message)
-      setError(message)
+      if (!isAutoSave) {
+        showToast('error', message)
+        setError(message)
+      }
     } finally {
-      setSavingRows(false)
+      if (!isAutoSave) setSavingRows(false)
     }
   }
 
@@ -3287,7 +3371,7 @@ export default function StatementDetails() {
     })
   }
 
-  // Parse existing headers to detect DR NO and RT NO inclusion
+  // Parse existing headers to detect DR NO, RT NO, and Material Cost inclusion
   const parseExistingHeaderFlags = (rawHeaders = []) => {
     const normalizeHeaderKey = (header = '') => {
       const headerText = typeof header === 'object' ? (header.header || header.key || header) : header
@@ -3299,12 +3383,13 @@ export default function StatementDetails() {
 
     const hasDrNo = rawHeaders.some((header) => normalizeHeaderKey(header) === 'drno')
     const hasRtNo = rawHeaders.some((header) => normalizeHeaderKey(header) === 'rtno')
+    const hasMaterialCost = rawHeaders.some((header) => normalizeHeaderKey(header) === 'materialcost')
 
-    return { hasDrNo, hasRtNo }
+    return { hasDrNo, hasRtNo, hasMaterialCost }
   }
 
-  // Rebuild headers by toggling DR NO and RT NO
-  const rebuildHeadersWithToggle = (currentHeaders = [], newIncludeDrNo, newIncludeRtNo) => {
+  // Rebuild headers by toggling DR NO, RT NO, and Material Cost
+  const rebuildHeadersWithToggle = (currentHeaders = [], newIncludeDrNo, newIncludeRtNo, newIncludeMaterialCost) => {
     const normalizeHeaderKey = (header = '') => {
       const headerText = typeof header === 'object' ? (header.header || header.key || header) : header
       return String(headerText ?? '')
@@ -3313,19 +3398,20 @@ export default function StatementDetails() {
         .replace(/[^a-z0-9]/g, '')
     }
 
-    // Filter out DR NO and RT NO from current headers
+    // Find the position of NO. column and Sales column
+    const noIndex = currentHeaders.findIndex((header) => normalizeHeaderKey(header) === 'no')
+    const salesIndex = currentHeaders.findIndex((header) => normalizeHeaderKey(header) === 'sales')
+
+    // Filter out DR NO, RT NO, and Material Cost from current headers
     const filtered = currentHeaders.filter((header) => {
       const normalized = normalizeHeaderKey(header)
-      return normalized !== 'drno' && normalized !== 'rtno'
+      return normalized !== 'drno' && normalized !== 'rtno' && normalized !== 'materialcost'
     })
 
-    // Find the position after NO. to insert DR NO and RT NO
-    const noIndex = filtered.findIndex((h) => normalizeHeaderKey(h) === 'no')
-    if (noIndex === -1) return filtered
-
     const result = [...filtered]
-    let insertPos = noIndex + 1
 
+    // Insert DR NO and RT NO after NO. column
+    let insertPos = noIndex + 1
     if (newIncludeDrNo) {
       result.splice(insertPos, 0, { key: 'dr_no', header: 'DR NO.' })
       insertPos++
@@ -3333,6 +3419,17 @@ export default function StatementDetails() {
     if (newIncludeRtNo) {
       result.splice(insertPos, 0, { key: 'rt_no', header: 'RT NO.' })
       insertPos++
+    }
+
+    // Insert Material Cost before Sales column
+    if (newIncludeMaterialCost) {
+      const materialCostIndex = result.findIndex((header) => normalizeHeaderKey(header) === 'sales')
+      if (materialCostIndex !== -1) {
+        result.splice(materialCostIndex, 0, { key: 'material_cost', header: 'MATERIAL COST' })
+      } else {
+        // If Sales column not found, append at the end
+        result.push({ key: 'material_cost', header: 'MATERIAL COST' })
+      }
     }
 
     return result
@@ -3358,7 +3455,7 @@ export default function StatementDetails() {
         }
       }
 
-      const newHeaders = rebuildHeadersWithToggle(rawHeaders, checked, includeRtNo)
+      const newHeaders = rebuildHeadersWithToggle(rawHeaders, checked, includeRtNo, includeMaterialCost)
       setStatement((prev) => ({
         ...prev,
         soa_headers: newHeaders,
@@ -3397,7 +3494,46 @@ export default function StatementDetails() {
         }
       }
 
-      const newHeaders = rebuildHeadersWithToggle(rawHeaders, includeDrNo, checked)
+      const newHeaders = rebuildHeadersWithToggle(rawHeaders, includeDrNo, checked, includeMaterialCost)
+      setStatement((prev) => ({
+        ...prev,
+        soa_headers: newHeaders,
+      }))
+
+      // Save to server
+      try {
+        await apiClient.put(`/statement/${statementId}`, {
+          headers: newHeaders
+        })
+        // Reload statement details to reflect header changes
+        loadStatementDetails()
+      } catch (err) {
+        console.error('Failed to save headers:', err)
+      }
+    }
+  }
+
+  // Handle toggling Material Cost inclusion
+  const handleToggleMaterialCost = async (checked) => {
+    setIncludeMaterialCost(checked)
+    if (statement?.soa_headers) {
+      let rawHeaders = []
+      if (Array.isArray(statement.soa_headers)) {
+        rawHeaders = statement.soa_headers
+      } else if (typeof statement.soa_headers === 'string') {
+        const trimmed = statement.soa_headers.trim()
+        try {
+          const parsed = JSON.parse(trimmed)
+          rawHeaders = Array.isArray(parsed) ? parsed : [parsed]
+        } catch {
+          rawHeaders = trimmed
+            .split(',')
+            .map((h) => h.trim())
+            .filter(Boolean)
+        }
+      }
+
+      const newHeaders = rebuildHeadersWithToggle(rawHeaders, includeDrNo, includeRtNo, checked)
       setStatement((prev) => ({
         ...prev,
         soa_headers: newHeaders,
@@ -3854,6 +3990,9 @@ export default function StatementDetails() {
             onToggleDrNo={handleToggleDrNo}
             includeRtNo={includeRtNo}
             onToggleRtNo={handleToggleRtNo}
+            includeMaterialCost={includeMaterialCost}
+            onToggleMaterialCost={handleToggleMaterialCost}
+            onAutoSave={triggerAutoSave}
             ref={tableRef}
           />
         ) : (
