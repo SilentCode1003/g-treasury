@@ -398,26 +398,44 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
   // Row color picker state
   const [showColorPicker, setShowColorPicker] = useState(null)
+  const colorPickerRef = useRef(null)
 
   // Row color management functions
   const handleRowColorChange = (rowId, color) => {
-    setRows(prevRows => prevRows.map(row => 
+    setRows(prevRows => prevRows.map(row =>
       row.id === rowId ? { ...row, color } : row
     ))
     setShowColorPicker(null)
   }
 
   const handleCustomColorChange = (rowId, color) => {
-    setRows(prevRows => prevRows.map(row => 
+    setRows(prevRows => prevRows.map(row =>
       row.id === rowId ? { ...row, color } : row
     ))
   }
 
   const handleRowColorRemove = (rowId) => {
-    setRows(prevRows => prevRows.map(row => 
+    setRows(prevRows => prevRows.map(row =>
       row.id === rowId ? { ...row, color: null } : row
     ))
   }
+
+  // Close color picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target)) {
+        setShowColorPicker(null)
+      }
+    }
+
+    if (showColorPicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showColorPicker])
   
   // Apply default values for SERVICE TYPE and WORK DONE columns
   React.useEffect(() => {
@@ -682,6 +700,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const [activeStoreDropdown, setActiveStoreDropdown] = useState({ rowId: null, fieldKey: null })
   const [focusedNumericField, setFocusedNumericField] = useState(null)
   const [computedTotals, setComputedTotals] = useState({ subTotal: 0, vat: 0, total: 0 })
+  const [sortColumn, setSortColumn] = useState(null)
+  const [sortDirection, setSortDirection] = useState('asc')
+  const [groupByColor, setGroupByColor] = useState(false)
   const storeDropdownBlurTimer = useRef(null)
   const qtyPanelCloseTimer = useRef(null)
   const addPartRowTimer = useRef(null)
@@ -1131,6 +1152,50 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     })
   }
 
+  const handleSort = (columnKey) => {
+    if (sortColumn === columnKey) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(columnKey)
+      setSortDirection('asc')
+    }
+
+    // Also reorder the actual rows array so the sort persists on save
+    setRows((currentRows) => {
+      const newDirection = sortColumn === columnKey ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc'
+      return [...currentRows].sort((a, b) => {
+        const aValue = a.values?.[columnKey]
+        const bValue = b.values?.[columnKey]
+
+        let comparison = 0
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          comparison = aValue - bValue
+        } else {
+          const aStr = String(aValue ?? '').toLowerCase()
+          const bStr = String(bValue ?? '').toLowerCase()
+          comparison = aStr.localeCompare(bStr)
+        }
+
+        return newDirection === 'asc' ? comparison : -comparison
+      })
+    })
+  }
+
+  const handleGroupByColor = (checked) => {
+    setGroupByColor(checked)
+
+    // Also reorder the actual rows array so the grouping persists on save
+    if (checked) {
+      setRows((currentRows) => {
+        return [...currentRows].sort((a, b) => {
+          const aColor = a.color || 'none'
+          const bColor = b.color || 'none'
+          return aColor.localeCompare(bColor)
+        })
+      })
+    }
+  }
+
   useEffect(() => {
     setRows((currentRows) =>
       currentRows.map((row) => {
@@ -1162,7 +1227,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const filteredData = useMemo(() => {
     const query = localSearchQuery.trim().toLowerCase()
 
-    return rows.filter((item) => {
+    let result = rows.filter((item) => {
       const activeSearchFields = columns.map((col) => col.key).filter(Boolean)
       const matchesSearch =
         query.length === 0
@@ -1182,7 +1247,38 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
       return matchesSearch && matchesColumnFilter
     })
-  }, [rows, columns, localSearchQuery, selectedColumnKey, selectedColumnValue])
+
+    // Apply sorting if sortColumn is set
+    if (sortColumn) {
+      result = [...result].sort((a, b) => {
+        const aValue = a.values?.[sortColumn]
+        const bValue = b.values?.[sortColumn]
+
+        // Handle different value types
+        let comparison = 0
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          comparison = aValue - bValue
+        } else {
+          const aStr = String(aValue ?? '').toLowerCase()
+          const bStr = String(bValue ?? '').toLowerCase()
+          comparison = aStr.localeCompare(bStr)
+        }
+
+        return sortDirection === 'asc' ? comparison : -comparison
+      })
+    }
+
+    // Apply color grouping if enabled
+    if (groupByColor) {
+      result = [...result].sort((a, b) => {
+        const aColor = a.color || 'none'
+        const bColor = b.color || 'none'
+        return aColor.localeCompare(bColor)
+      })
+    }
+
+    return result
+  }, [rows, columns, localSearchQuery, selectedColumnKey, selectedColumnValue, sortColumn, sortDirection, groupByColor])
 
   return (
     <div className="h-auto lg:flex-1 lg:min-h-0 flex flex-col rounded border border-gray-200 bg-white shadow-sm">
@@ -1230,6 +1326,16 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
             <option value="overall">Overall VAT</option>
             <option value="per-row">VAT per row</option>
           </select>
+
+          <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50">
+            <input
+              type="checkbox"
+              checked={groupByColor}
+              onChange={(e) => handleGroupByColor(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-red-500 focus:ring-red-500"
+            />
+            <span className="text-xs">Group by Color</span>
+          </label>
 
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1351,9 +1457,17 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               {columns.map((col, idx) => (
                 <th
                   key={col.key}
-                  className={`sticky top-0 z-10 bg-red-600 px-6 py-3 ${col.key === 'date' ? 'w-[6rem] px-3' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                  className={`sticky top-0 z-10 bg-red-600 px-6 py-3 ${col.key === 'date' ? 'w-[6rem] px-3' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'} cursor-pointer hover:bg-red-700`}
+                  onClick={() => handleSort(col.key)}
                 >
-                  {typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
+                  <div className="flex items-center gap-1">
+                    <span>{typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}</span>
+                    {sortColumn === col.key && (
+                      <span className="text-[8px]">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
                 </th>
               ))}
               <th className="sticky top-0 z-10 bg-red-600 w-16 px-3 py-3">
@@ -1771,7 +1885,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       )}
                                     </button>
                                     {showColorPicker === row.id && (
-                                      <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
+                                      <div ref={colorPickerRef} className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
                                         <div className="grid grid-cols-6 gap-1 mb-2">
                                           {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
                                             <button
@@ -2201,7 +2315,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                   )}
                                 </button>
                                 {showColorPicker === row.id && (
-                                  <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
+                                  <div ref={colorPickerRef} className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
                                     <div className="grid grid-cols-6 gap-1 mb-2">
                                       {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
                                         <button
