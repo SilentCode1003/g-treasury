@@ -516,7 +516,24 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     const searchStr = String(searchTerm || '')
     if (!searchStr || searchStr.trim() === '') return stores.slice(0, 20)
     return stores.filter((store) =>
+      String(store.name).toLowerCase().includes(searchStr.toLowerCase()) ||
+      String(store.store_no || '').toLowerCase().includes(searchStr.toLowerCase())
+    ).slice(0, 20)
+  }
+
+  const filteredStoresByName = (searchTerm) => {
+    const searchStr = String(searchTerm || '')
+    if (!searchStr || searchStr.trim() === '') return stores.slice(0, 20)
+    return stores.filter((store) =>
       String(store.name).toLowerCase().includes(searchStr.toLowerCase())
+    ).slice(0, 20)
+  }
+
+  const filteredStoresByNumber = (searchTerm) => {
+    const searchStr = String(searchTerm || '')
+    if (!searchStr || searchStr.trim() === '') return stores.slice(0, 20)
+    return stores.filter((store) =>
+      String(store.number || '').toLowerCase().includes(searchStr.toLowerCase())
     ).slice(0, 20)
   }
 
@@ -1614,12 +1631,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                           placeholder="Store no."
                                         />
-                                        {activeStoreDropdown === `${row.id}-${col.key}` && filteredStores(currentValue).length > 0 && (
-                                          <div 
+                                        {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByNumber(currentValue).length > 0 && (
+                                          <div
                                             className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                             onMouseDown={(e) => e.preventDefault()}
                                           >
-                                            {filteredStores(currentValue).map((store) => (
+                                            {filteredStoresByNumber(currentValue).map((store) => (
                                               <button
                                                 key={store.store_id}
                                                 type="button"
@@ -1657,12 +1674,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Store name"
                                         />
-                                        {activeStoreDropdown === `${row.id}-${col.key}` && filteredStores(currentValue).length > 0 && (
-                                          <div 
+                                        {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByName(currentValue).length > 0 && (
+                                          <div
                                             className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                             onMouseDown={(e) => e.preventDefault()}
                                           >
-                                            {filteredStores(currentValue).map((store) => (
+                                            {filteredStoresByName(currentValue).map((store) => (
                                               <button
                                                 key={store.store_id}
                                                 type="button"
@@ -1990,12 +2007,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                     placeholder="Store no."
                                   />
-                                  {activeStoreDropdown === `${row.id}-${col.key}` && filteredStores(currentValue).length > 0 && (
-                                    <div 
+                                  {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByNumber(currentValue).length > 0 && (
+                                    <div
                                       className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                       onMouseDown={(e) => e.preventDefault()}
                                     >
-                                      {filteredStores(currentValue).map((store) => (
+                                      {filteredStoresByNumber(currentValue).map((store) => (
                                         <button
                                           key={store.store_id}
                                           type="button"
@@ -2228,12 +2245,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                     placeholder="Store name"
                                   />
-                                  {activeStoreDropdown === `${row.id}-${col.key}` && filteredStores(currentValue).length > 0 && (
-                                    <div 
+                                  {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByName(currentValue).length > 0 && (
+                                    <div
                                       className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                       onMouseDown={(e) => e.preventDefault()}
                                     >
-                                      {filteredStores(currentValue).map((store) => (
+                                      {filteredStoresByName(currentValue).map((store) => (
                                         <button
                                           key={store.store_id}
                                           type="button"
