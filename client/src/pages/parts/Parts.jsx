@@ -24,6 +24,7 @@ const formatCurrency = (value) =>
 const mapPart = (item) => ({
   id: item.part_id ?? item.id,
   name: item.name || 'Untitled part',
+  unit: item.unit || '—',
   description: item.description || '—',
   price: Number(item.price || 0),
   status: formatStatus(item.status),
@@ -38,7 +39,7 @@ export default function Parts() {
   const [toast, setToast] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [form, setForm] = useState({ name: '', description: '', price: '' })
+  const [form, setForm] = useState({ name: '', unit: '', description: '', price: '' })
   const [editForm, setEditForm] = useState(null)
 
   const handleNavigate = () => {}
@@ -67,6 +68,7 @@ export default function Parts() {
     try {
       const payload = {
         name: form.name,
+        unit: form.unit.trim() || null,
         description: form.description,
         price: form.price === '' ? null : Number(form.price),
         status: 'ACTIVE',
@@ -75,7 +77,7 @@ export default function Parts() {
       showToast('success', response.data?.message || 'Part created successfully.')
       setParts((prev) => [mapPart(response.data?.data || payload), ...prev])
       setModalOpen(false)
-      setForm({ name: '', description: '', price: '' })
+      setForm({ name: '', unit: '', description: '', price: '' })
       setError('')
     } catch (err) {
       showToast('error', err?.response?.data?.message || 'Unable to create part record.')
@@ -87,6 +89,7 @@ export default function Parts() {
     setEditForm({
       id: row.id,
       name: row.name || '',
+      unit: row.unit === '—' ? '' : row.unit || '',
       description: row.description || '',
       price: row.price || '',
       status: row.status?.toUpperCase() || 'ACTIVE',
@@ -101,6 +104,7 @@ export default function Parts() {
     try {
       const payload = {
         name: editForm.name,
+        unit: editForm.unit,
         description: editForm.description,
         price: editForm.price === '' ? null : Number(editForm.price),
         status: editForm.status,
@@ -151,6 +155,11 @@ export default function Parts() {
       render: (row) => <div className="font-bold text-black">{row.name}</div>,
     },
     {
+      header: 'Unit',
+      key: 'unit',
+      render: (row) => <div className="text-neutral-500">{row.unit}</div>,
+    },
+    {
       header: 'Description',
       key: 'description',
       render: (row) => <div className="text-neutral-500">{row.description}</div>,
@@ -158,7 +167,9 @@ export default function Parts() {
     {
       header: 'Price',
       key: 'price',
-      render: (row) => <div className="font-semibold text-gray-700">{formatCurrency(row.price)}</div>,
+      render: (row) => (
+        <div className="font-semibold text-gray-700">{formatCurrency(row.price)}</div>
+      ),
     },
     {
       header: 'Status',
@@ -278,7 +289,9 @@ export default function Parts() {
               Total Value
             </p>
             <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-red-600">{formatCurrency(metrics.totalValue)}</span>
+              <span className="text-2xl font-black text-red-600">
+                {formatCurrency(metrics.totalValue)}
+              </span>
               <span className="text-[10px] font-medium text-gray-400">inventory value</span>
             </div>
           </div>
@@ -288,7 +301,7 @@ export default function Parts() {
           data={filteredParts}
           searchQuery={searchQuery}
           statusFilter={statusFilter}
-          searchFields={['name', 'id', 'description']}
+          searchFields={['name', 'id', 'unit', 'description']}
           columns={columns}
           registryLabel="Parts Registry"
           footerLabel="Redline Inventory System Operational"
@@ -306,6 +319,16 @@ export default function Parts() {
                 required
                 value={editForm.name}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Unit
+              </label>
+              <input
+                value={editForm.unit}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, unit: e.target.value }))}
                 className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
               />
             </div>
@@ -385,6 +408,16 @@ export default function Parts() {
               required
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Unit
+            </label>
+            <input
+              value={form.unit}
+              onChange={(e) => setForm((prev) => ({ ...prev, unit: e.target.value }))}
               className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
             />
           </div>

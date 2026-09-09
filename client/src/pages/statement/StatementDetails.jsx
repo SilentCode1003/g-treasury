@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState, useImperativeHandle, useCallback } from 'react'
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useImperativeHandle,
+  useCallback,
+} from 'react'
 import { ChevronLeft, Trash2, Palette } from 'lucide-react'
 import { useLocation, useMatch, useNavigate } from '@tanstack/react-router'
 import Layout from '../components/Layout'
@@ -38,7 +45,7 @@ const fadeInKeyframes = `
       opacity: 0;
       transform: translateY(-5px);
     }
-    to {
+  })
       opacity: 1;
       transform: translateY(0);
     }
@@ -91,7 +98,10 @@ const normalizeHeaderKey = (value = '') =>
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '')
 
-const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, saving, onTotalsChange }) => {
+const MaintenanceTable = React.forwardRef(function MaintenanceTable(
+  { statementId, documentMeta, onSave, initialRows, saving, onTotalsChange },
+  ref,
+) {
   // Inject CSS keyframes for fade animation
   useEffect(() => {
     const style = document.createElement('style')
@@ -109,7 +119,19 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
         values: r.values || r,
       }))
     }
-    return [{ id: 'row-1', values: { area: '', noOfStore: '', pricePerStore: 350, totalAmount: 0, serviceType: 'MAINTENANCE', workDone: 'REPAIR AND MAINTENANCE' } }]
+    return [
+      {
+        id: 'row-1',
+        values: {
+          area: '',
+          noOfStore: '',
+          pricePerStore: 350,
+          totalAmount: 0,
+          serviceType: 'MAINTENANCE',
+          workDone: 'REPAIR AND MAINTENANCE',
+        },
+      },
+    ]
   })
   const [cities, setCities] = useState([])
   const [loadingCities, setLoadingCities] = useState(true)
@@ -119,11 +141,13 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
   // Sync rows with initialRows when initialRows changes (e.g., after save)
   useEffect(() => {
     if (Array.isArray(initialRows) && initialRows.length > 0) {
-      setRows(initialRows.map((r, i) => ({
-        id: r.id || `row-${i + 1}`,
-        values: r.values || r,
-        color: r.color || null,
-      })))
+      setRows(
+        initialRows.map((r, i) => ({
+          id: r.id || `row-${i + 1}`,
+          values: r.values || r,
+          color: r.color || null,
+        })),
+      )
     }
   }, [initialRows])
 
@@ -147,8 +171,8 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
 
   const filteredCities = (searchTerm) => {
     if (!searchTerm || searchTerm.trim() === '') return cities
-    return cities.filter((city) => 
-      String(city).toLowerCase().includes(String(searchTerm).toLowerCase())
+    return cities.filter((city) =>
+      String(city).toLowerCase().includes(String(searchTerm).toLowerCase()),
     )
   }
 
@@ -174,7 +198,10 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
   const addRow = () => {
     setRows((prev) => [
       ...prev,
-      { id: `row-${prev.length + 1}`, values: { area: '', noOfStore: '', pricePerStore: 350, totalAmount: 0 } },
+      {
+        id: `row-${prev.length + 1}`,
+        values: { area: '', noOfStore: '', pricePerStore: 350, totalAmount: 0 },
+      },
     ])
   }
 
@@ -183,13 +210,58 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
   }
 
   const handleSave = () => {
-    onSave?.(rows, [{ label: 'AREA' }, { label: 'NO OF STORE' }, { label: 'PRICE PER STORE' }, { label: 'TOTAL AMOUNT' }], { vatMode: false, quantityMode: false })
+    onSave?.(
+      rows,
+      [
+        { label: 'AREA' },
+        { label: 'NO OF STORE' },
+        { label: 'PRICE PER STORE' },
+        { label: 'TOTAL AMOUNT' },
+      ],
+      { vatMode: false, quantityMode: false },
+    )
   }
 
   // Calculate totals
   const subTotal = rows.reduce((sum, row) => sum + (Number(row.values.totalAmount) || 0), 0)
   const vat = Number((subTotal * 0.12).toFixed(2))
   const total = Number((subTotal + vat).toFixed(2))
+
+  const maintenanceColumns = [
+    { key: 'area', header: 'AREA' },
+    { key: 'noOfStore', header: 'NO OF STORE' },
+    { key: 'pricePerStore', header: 'PRICE PER STORE' },
+    { key: 'totalAmount', header: 'TOTAL AMOUNT' },
+  ]
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      saveRows: handleSave,
+      getRows: () => rows,
+      getColumns: () => maintenanceColumns,
+      exportPdf: () =>
+        exportStatementToPdf({
+          columns: maintenanceColumns,
+          rows,
+          documentMeta,
+          statementId,
+          totals: { subTotal, vat, total },
+        }),
+      generatePdfPreview: async (showSubtotal, showVat, showTotal) =>
+        exportStatementToPdf({
+          columns: maintenanceColumns,
+          rows,
+          documentMeta,
+          statementId,
+          totals: { subTotal, vat, total },
+          showSubtotal,
+          showVat,
+          showTotal,
+        }),
+    }),
+    [rows, documentMeta, statementId, subTotal, vat, total],
+  )
 
   React.useEffect(() => {
     onTotalsChange?.({ subTotal, vat, total })
@@ -201,10 +273,18 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">AREA</th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">NO OF STORE</th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">PRICE PER STORE</th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">TOTAL AMOUNT</th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
+                AREA
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
+                NO OF STORE
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
+                PRICE PER STORE
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
+                TOTAL AMOUNT
+              </th>
               <th className="px-4 py-3 w-10"></th>
             </tr>
           </thead>
@@ -237,24 +317,25 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
                         className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                         placeholder="Search or type area"
                       />
-                      {activeAreaDropdown === row.id && filteredCities(row.values.area).length > 0 && (
-                        <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
-                          {filteredCities(row.values.area).map((city) => (
-                            <button
-                              key={city}
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault()
-                                handleRowChange(row.id, 'area', city)
-                                setActiveAreaDropdown(null)
-                              }}
-                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                            >
-                              {city}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      {activeAreaDropdown === row.id &&
+                        filteredCities(row.values.area).length > 0 && (
+                          <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                            {filteredCities(row.values.area).map((city) => (
+                              <button
+                                key={city}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  handleRowChange(row.id, 'area', city)
+                                  setActiveAreaDropdown(null)
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                              >
+                                {city}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                     </div>
                   )}
                 </td>
@@ -270,7 +351,11 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
                         value={isFocused ? String(value) : formatQuantityInput(value)}
                         onChange={(e) => {
                           const nextValue = e.target.value.replace(/[^0-9]/g, '')
-                          handleRowChange(row.id, 'noOfStore', nextValue === '' ? 0 : Number(nextValue))
+                          handleRowChange(
+                            row.id,
+                            'noOfStore',
+                            nextValue === '' ? 0 : Number(nextValue),
+                          )
                         }}
                         onFocus={() => setFocusedNumericField(fieldKey)}
                         onBlur={(e) => {
@@ -297,10 +382,17 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
                         onChange={(e) => {
                           const nextValue = e.target.value.replace(/[^0-9.]/g, '')
                           // Keep as string if it ends with dot or has decimal being typed
-                          if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                          if (
+                            nextValue.endsWith('.') ||
+                            (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)
+                          ) {
                             handleRowChange(row.id, 'pricePerStore', nextValue)
                           } else {
-                            handleRowChange(row.id, 'pricePerStore', nextValue === '' ? 0 : Number(nextValue))
+                            handleRowChange(
+                              row.id,
+                              'pricePerStore',
+                              nextValue === '' ? 0 : Number(nextValue),
+                            )
                           }
                         }}
                         onFocus={() => setFocusedNumericField(fieldKey)}
@@ -351,7 +443,7 @@ const MaintenanceTable = ({ statementId, documentMeta, onSave, initialRows, savi
       </div>
     </div>
   )
-}
+})
 
 const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   {
@@ -376,6 +468,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     includeMaterialCost = true,
     onToggleMaterialCost,
     onAutoSave,
+    onExportExcel,
   },
   ref,
 ) {
@@ -390,18 +483,24 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   })
 
   // Expose methods to parent via ref
-  useImperativeHandle(ref, () => ({
-    getRows: () => rows,
-    getColumns: () => columns,
-  }), [rows, columns])
+  useImperativeHandle(
+    ref,
+    () => ({
+      getRows: () => rows,
+      getColumns: () => columns,
+    }),
+    [rows, columns],
+  )
 
   // Sync rows with initialRows when initialRows changes (e.g., after save)
   useEffect(() => {
     if (Array.isArray(initialRows) && initialRows.length > 0) {
-      setRows(initialRows.map((r, i) => {
-        if (r && r.id && r.values) return r
-        return { id: r.id || `row-${i + 1}`, values: r.values || r, color: r.color || null }
-      }))
+      setRows(
+        initialRows.map((r, i) => {
+          if (r && r.id && r.values) return r
+          return { id: r.id || `row-${i + 1}`, values: r.values || r, color: r.color || null }
+        }),
+      )
     }
   }, [initialRows])
 
@@ -411,10 +510,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
   // Row color management functions
   const handleRowColorChange = (rowId, color) => {
-    setRows(prevRows => {
-      const updated = prevRows.map(row =>
-        row.id === rowId ? { ...row, color } : row
-      )
+    setRows((prevRows) => {
+      const updated = prevRows.map((row) => (row.id === rowId ? { ...row, color } : row))
       // Defer auto-save to avoid setState during render
       setTimeout(() => onAutoSave?.(updated, columns), 0)
       return updated
@@ -423,16 +520,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   }
 
   const handleCustomColorChange = (rowId, color) => {
-    setRows(prevRows => prevRows.map(row =>
-      row.id === rowId ? { ...row, color } : row
-    ))
+    setRows((prevRows) => prevRows.map((row) => (row.id === rowId ? { ...row, color } : row)))
   }
 
   const handleRowColorRemove = (rowId) => {
-    setRows(prevRows => {
-      const updated = prevRows.map(row =>
-        row.id === rowId ? { ...row, color: null } : row
-      )
+    setRows((prevRows) => {
+      const updated = prevRows.map((row) => (row.id === rowId ? { ...row, color: null } : row))
       // Defer auto-save to avoid setState during render
       setTimeout(() => onAutoSave?.(updated, columns), 0)
       return updated
@@ -455,16 +548,23 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showColorPicker])
-  
+
   // Apply default values for SERVICE TYPE and WORK DONE columns
   React.useEffect(() => {
     setRows((prevRows) => {
-      const serviceTypeCol = columns.find((col) => String(col.header || '').toUpperCase() === 'SERVICE TYPE')
-      const workDoneCol = columns.find((col) => String(col.header || '').toUpperCase() === 'WORK DONE')
-      
+      const serviceTypeCol = columns.find(
+        (col) => String(col.header || '').toUpperCase() === 'SERVICE TYPE',
+      )
+      const workDoneCol = columns.find(
+        (col) => String(col.header || '').toUpperCase() === 'WORK DONE',
+      )
+
       return prevRows.map((row) => {
         const newValues = { ...row.values }
-        if (serviceTypeCol && (!newValues[serviceTypeCol.key] || newValues[serviceTypeCol.key] === '')) {
+        if (
+          serviceTypeCol &&
+          (!newValues[serviceTypeCol.key] || newValues[serviceTypeCol.key] === '')
+        ) {
           newValues[serviceTypeCol.key] = 'MAINTENANCE'
         }
         if (workDoneCol && (!newValues[workDoneCol.key] || newValues[workDoneCol.key] === '')) {
@@ -474,7 +574,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       })
     })
   }, [columns])
-  
+
   const [cities, setCities] = useState([])
   const [loadingCities, setLoadingCities] = useState(true)
   const [activeAreaDropdown, setActiveAreaDropdown] = useState(null)
@@ -518,51 +618,63 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
   const filteredCities = (searchTerm) => {
     if (!searchTerm || searchTerm.trim() === '') return cities
-    return cities.filter((city) => 
-      String(city).toLowerCase().includes(String(searchTerm).toLowerCase())
+    return cities.filter((city) =>
+      String(city).toLowerCase().includes(String(searchTerm).toLowerCase()),
     )
   }
 
   const filteredParts = (searchTerm) => {
     if (!searchTerm || searchTerm.trim() === '') return parts
-    return parts.filter((part) => 
-      String(part.name).toLowerCase().includes(String(searchTerm).toLowerCase()) ||
-      String(part.description).toLowerCase().includes(String(searchTerm).toLowerCase())
+    return parts.filter(
+      (part) =>
+        String(part.name).toLowerCase().includes(String(searchTerm).toLowerCase()) ||
+        String(part.description).toLowerCase().includes(String(searchTerm).toLowerCase()),
     )
   }
 
   const filteredStores = (searchTerm) => {
     const searchStr = String(searchTerm || '')
     if (!searchStr || searchStr.trim() === '') return stores.slice(0, 20)
-    return stores.filter((store) =>
-      String(store.name).toLowerCase().includes(searchStr.toLowerCase()) ||
-      String(store.store_no || '').toLowerCase().includes(searchStr.toLowerCase())
-    ).slice(0, 20)
+    return stores
+      .filter(
+        (store) =>
+          String(store.name).toLowerCase().includes(searchStr.toLowerCase()) ||
+          String(store.store_no || '')
+            .toLowerCase()
+            .includes(searchStr.toLowerCase()),
+      )
+      .slice(0, 20)
   }
 
   const filteredStoresByName = (searchTerm) => {
     const searchStr = String(searchTerm || '')
     if (!searchStr || searchStr.trim() === '') return stores.slice(0, 20)
-    return stores.filter((store) =>
-      String(store.name).toLowerCase().includes(searchStr.toLowerCase())
-    ).slice(0, 20)
+    return stores
+      .filter((store) => String(store.name).toLowerCase().includes(searchStr.toLowerCase()))
+      .slice(0, 20)
   }
 
   const filteredStoresByNumber = (searchTerm) => {
     const searchStr = String(searchTerm || '')
     if (!searchStr || searchStr.trim() === '') return stores.slice(0, 20)
-    return stores.filter((store) =>
-      String(store.number || '').toLowerCase().includes(searchStr.toLowerCase())
-    ).slice(0, 20)
+    return stores
+      .filter((store) =>
+        String(store.number || '')
+          .toLowerCase()
+          .includes(searchStr.toLowerCase()),
+      )
+      .slice(0, 20)
   }
 
   // Check if table has parts columns
   const hasPartsColumns = useMemo(() => {
-    const headers = columns.map(col => String(col.header || '').toUpperCase())
-    return headers.includes('PARTS DESCRIPTION') && 
-           headers.includes('PARTS QTY.') && 
-           headers.includes('PRICE') && 
-           headers.includes('SUBTOTAL')
+    const headers = columns.map((col) => String(col.header || '').toUpperCase())
+    return (
+      headers.includes('PARTS DESCRIPTION') &&
+      headers.includes('PARTS QTY.') &&
+      headers.includes('PRICE') &&
+      headers.includes('SUBTOTAL')
+    )
   }, [columns])
 
   // Initialize parts array for rows when table has parts columns
@@ -586,7 +698,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         if (row.id === rowId) {
           const newPart = {
             id: `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 }
+            values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 },
           }
           return { ...row, parts: [...(row.parts || []), newPart] }
         }
@@ -614,19 +726,19 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           const updatedParts = (row.parts || []).map((part) => {
             if (part.id === partId) {
               const newPartValues = { ...part.values, [field]: value }
-              
+
               // Auto-compute subtotal
               if (field === 'partsQty' || field === 'price') {
                 const partsQty = Number(newPartValues.partsQty || 0)
                 const price = Number(newPartValues.price || 0)
                 newPartValues.subtotal = partsQty * price
               }
-              
+
               return { ...part, values: newPartValues }
             }
             return part
           })
-          
+
           return { ...row, parts: updatedParts }
         }
         return row
@@ -645,13 +757,13 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                 partsDescription: part.name,
                 partsQty: 1,
                 price: part.price,
-                subtotal: Number(part.price || 0)
+                subtotal: Number(part.price || 0),
               }
               return { ...partItem, values: newPartValues }
             }
             return partItem
           })
-          
+
           return { ...row, parts: updatedParts }
         }
         return row
@@ -678,19 +790,27 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           soa_total: computedTotals.total,
         },
       ),
-    exportExcel: () => exportStatementToExcel({ columns, rows, documentMeta, statementId, totals: computedTotals }),
-    exportPdf: () => exportStatementToPdf({ columns, rows, documentMeta, statementId, totals: computedTotals }),
+    exportExcel: () =>
+      onExportExcel?.({
+        columns,
+        rows,
+        documentMeta,
+        statementId,
+        totals: computedTotals,
+      }),
+    exportPdf: () =>
+      exportStatementToPdf({ columns, rows, documentMeta, statementId, totals: computedTotals }),
     generatePdfPreview: async (showSubtotal, showVat, showTotal) => {
       try {
-        const blob = await exportStatementToPdf({ 
-          columns, 
-          rows, 
-          documentMeta, 
-          statementId, 
+        const blob = await exportStatementToPdf({
+          columns,
+          rows,
+          documentMeta,
+          statementId,
           totals: computedTotals,
           showSubtotal,
           showVat,
-          showTotal
+          showTotal,
         })
         return blob
       } catch (err) {
@@ -714,11 +834,13 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     }, 0)
     const vat = vatPerRow
       ? rows.reduce(
-          (sum, r) => sum + getComputedVatValue(
-            r.parts && r.parts.length > 0 
-              ? r.parts.reduce((partSum, part) => partSum + (part.values?.subtotal || 0), 0)
-              : getComputedSalesTotal(r.values, columns)
-          ),
+          (sum, r) =>
+            sum +
+            getComputedVatValue(
+              r.parts && r.parts.length > 0
+                ? r.parts.reduce((partSum, part) => partSum + (part.values?.subtotal || 0), 0)
+                : getComputedSalesTotal(r.values, columns),
+            ),
           0,
         )
       : Number((subTotal * 0.12).toFixed(2))
@@ -977,8 +1099,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   }
 
   const handleAddRow = () => {
-    const serviceTypeCol = columns.find((col) => String(col.header || '').toUpperCase() === 'SERVICE TYPE')
-    const workDoneCol = columns.find((col) => String(col.header || '').toUpperCase() === 'WORK DONE')
+    const serviceTypeCol = columns.find(
+      (col) => String(col.header || '').toUpperCase() === 'SERVICE TYPE',
+    )
+    const workDoneCol = columns.find(
+      (col) => String(col.header || '').toUpperCase() === 'WORK DONE',
+    )
 
     const newValues = {}
     if (serviceTypeCol) {
@@ -995,10 +1121,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
     // Initialize parts array if table has parts columns
     if (hasPartsColumns) {
-      newRow.parts = [{
-        id: `part-${newRow.id}-initial`,
-        values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 }
-      }]
+      newRow.parts = [
+        {
+          id: `part-${newRow.id}-initial`,
+          values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 },
+        },
+      ]
     }
 
     setRows((currentRows) => {
@@ -1024,9 +1152,15 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         }
 
         // Auto-compute TOTAL AMOUNT for maintenance format (NO OF STORE × PRICE PER STORE)
-        const noOfStoreCol = columns.find((col) => String(col.header || '').toUpperCase() === 'NO OF STORE')
-        const pricePerStoreCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PRICE PER STORE')
-        const totalAmountCol = columns.find((col) => String(col.header || '').toUpperCase() === 'TOTAL AMOUNT')
+        const noOfStoreCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'NO OF STORE',
+        )
+        const pricePerStoreCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'PRICE PER STORE',
+        )
+        const totalAmountCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'TOTAL AMOUNT',
+        )
 
         if (noOfStoreCol && pricePerStoreCol && totalAmountCol) {
           if (columnKey === noOfStoreCol.key || columnKey === pricePerStoreCol.key) {
@@ -1037,9 +1171,15 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         }
 
         // Auto-compute TOTAL VAT-EX and TOTAL VAT-IN for Official Invoice format (NO OF STORE × AMOUNT PER STORE)
-        const amountPerStoreCol = columns.find((col) => String(col.header || '').toUpperCase() === 'AMOUNT PER STORE')
-        const totalVatExCol = columns.find((col) => String(col.header || '').toUpperCase() === 'TOTAL VAT-EX')
-        const totalVatInCol = columns.find((col) => String(col.header || '').toUpperCase() === 'TOTAL VAT-IN')
+        const amountPerStoreCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'AMOUNT PER STORE',
+        )
+        const totalVatExCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'TOTAL VAT-EX',
+        )
+        const totalVatInCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'TOTAL VAT-IN',
+        )
 
         if (amountPerStoreCol && totalVatExCol && totalVatInCol) {
           if (columnKey === amountPerStoreCol.key) {
@@ -1051,10 +1191,16 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         }
 
         // If PARTS DESCRIPTION is cleared, set PARTS QTY to 0
-        const partsDescCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION')
-        const partsQtyCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PARTS QTY.')
+        const partsDescCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION',
+        )
+        const partsQtyCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'PARTS QTY.',
+        )
         const priceCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PRICE')
-        const subtotalCol = columns.find((col) => String(col.header || '').toUpperCase() === 'SUBTOTAL')
+        const subtotalCol = columns.find(
+          (col) => String(col.header || '').toUpperCase() === 'SUBTOTAL',
+        )
 
         if (partsDescCol && partsQtyCol && columnKey === partsDescCol.key) {
           if (!value || value.trim() === '') {
@@ -1185,7 +1331,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
 
     // Also reorder the actual rows array so the sort persists on save
     setRows((currentRows) => {
-      const newDirection = sortColumn === columnKey ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc'
+      const newDirection =
+        sortColumn === columnKey ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc'
       const sorted = [...currentRows].sort((a, b) => {
         const aValue = a.values?.[columnKey]
         const bValue = b.values?.[columnKey]
@@ -1307,7 +1454,16 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     }
 
     return result
-  }, [rows, columns, localSearchQuery, selectedColumnKey, selectedColumnValue, sortColumn, sortDirection, groupByColor])
+  }, [
+    rows,
+    columns,
+    localSearchQuery,
+    selectedColumnKey,
+    selectedColumnValue,
+    sortColumn,
+    sortDirection,
+    groupByColor,
+  ])
 
   return (
     <div className="h-auto lg:flex-1 lg:min-h-0 flex flex-col rounded border border-gray-200 bg-white shadow-sm">
@@ -1322,8 +1478,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          
-          {columns.some(col => col.serviceMeta) && (
+          {columns.some((col) => col.serviceMeta) && (
             <>
               <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50">
                 <input
@@ -1356,7 +1511,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               </label>
             </>
           )}
-          
+
           <select
             value={vatPerRow ? 'per-row' : 'overall'}
             onChange={(event) => onVatModeChange?.(event.target.value === 'per-row')}
@@ -1376,9 +1531,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
             <span className="text-xs">Group by Color</span>
           </label>
 
-
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {columns.some(col => col.serviceMeta) && (
+            {columns.some((col) => col.serviceMeta) && (
               <div
                 className="relative"
                 onMouseEnter={() => {
@@ -1467,7 +1621,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               (col, index) =>
                 col.key && (
                   <option key={index} value={col.key}>
-                    {typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
+                    {typeof col.header === 'object'
+                      ? col.header.header || col.header.key || String(col.key)
+                      : String(col.header || col.key)}
                   </option>
                 ),
             )}
@@ -1501,11 +1657,13 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                   onClick={() => handleSort(col.key)}
                 >
                   <div className="flex items-center gap-1">
-                    <span>{typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}</span>
+                    <span>
+                      {typeof col.header === 'object'
+                        ? col.header.header || col.header.key || String(col.key)
+                        : String(col.header || col.key)}
+                    </span>
                     {sortColumn === col.key && (
-                      <span className="text-[8px]">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
+                      <span className="text-[8px]">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </div>
                 </th>
@@ -1521,14 +1679,14 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                 const hasParts = hasPartsColumns && row.parts && row.parts.length > 0
                 const partsCount = hasParts ? row.parts.length : 0
                 const shouldRenderAsParts = hasPartsColumns
-                
+
                 return (
                   <React.Fragment key={row.id || rowIdx}>
                     {shouldRenderAsParts ? (
                       // Render in parts mode
                       (row.parts || []).map((part, partIdx) => {
                         const isFirstPart = partIdx === 0
-                        
+
                         return (
                           <tr
                             key={part.id}
@@ -1548,26 +1706,39 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                               const isAreaField = String(col.header || '').toUpperCase() === 'AREA'
                               const isDateField = isDateColumn(col)
                               const isNumericField = isNumericColumn(col)
-                              const isPartsDescField = String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION'
-                              const isPartsQtyField = String(col.header || '').toUpperCase() === 'PARTS QTY.'
-                              const isPriceField = String(col.header || '').toUpperCase() === 'PRICE'
-                              const isSubtotalField = String(col.header || '').toUpperCase() === 'SUBTOTAL'
-                              const isTotalInvoiceField = String(col.header || '').toUpperCase() === 'TOTAL INVOICE AMOUNT'
-                              
+                              const isPartsDescField =
+                                String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION'
+                              const isPartsQtyField =
+                                String(col.header || '').toUpperCase() === 'PARTS QTY.'
+                              const isPriceField =
+                                String(col.header || '').toUpperCase() === 'PRICE'
+                              const isSubtotalField =
+                                String(col.header || '').toUpperCase() === 'SUBTOTAL'
+                              const isTotalInvoiceField =
+                                String(col.header || '').toUpperCase() === 'TOTAL INVOICE AMOUNT'
+
                               // Check if this is a parts column
-                              const isPartsColumn = isPartsDescField || isPartsQtyField || isPriceField || isSubtotalField
-                              
+                              const isPartsColumn =
+                                isPartsDescField ||
+                                isPartsQtyField ||
+                                isPriceField ||
+                                isSubtotalField
+
                               // For non-parts columns, only render on first part with rowSpan
                               if (!isPartsColumn) {
                                 if (!isFirstPart) return null // Skip for subsequent parts
-                                
+
                                 const currentValue = row.values?.[col.key] ?? ''
-                                
+
                                 // Calculate total invoice amount by summing all part subtotals
-                                const totalInvoiceAmount = isTotalInvoiceField && row.parts
-                                  ? row.parts.reduce((sum, part) => sum + (Number(part.values?.subtotal || 0)), 0)
-                                  : currentValue
-                                
+                                const totalInvoiceAmount =
+                                  isTotalInvoiceField && row.parts
+                                    ? row.parts.reduce(
+                                        (sum, part) => sum + Number(part.values?.subtotal || 0),
+                                        0,
+                                      )
+                                    : currentValue
+
                                 return (
                                   <td
                                     key={col.key}
@@ -1582,7 +1753,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       <input
                                         type="date"
                                         value={currentValue || ''}
-                                        onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
+                                        onChange={(e) =>
+                                          handleCellChange(row.id, col.key, e.target.value)
+                                        }
                                         className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       />
                                     ) : isAreaField ? (
@@ -1590,7 +1763,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                         <input
                                           type="text"
                                           value={currentValue}
-                                          onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
+                                          onChange={(e) =>
+                                            handleCellChange(row.id, col.key, e.target.value)
+                                          }
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Loading cities..."
                                           disabled
@@ -1611,24 +1786,25 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                             placeholder="Search or type area"
                                           />
-                                          {activeAreaDropdown === row.id && filteredCities(currentValue).length > 0 && (
-                                            <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
-                                              {filteredCities(currentValue).map((city) => (
-                                                <button
-                                                  key={city}
-                                                  type="button"
-                                                  onMouseDown={(e) => {
-                                                    e.preventDefault()
-                                                    handleCellChange(row.id, col.key, city)
-                                                    setActiveAreaDropdown(null)
-                                                  }}
-                                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                                >
-                                                  {city}
-                                                </button>
-                                              ))}
-                                            </div>
-                                          )}
+                                          {activeAreaDropdown === row.id &&
+                                            filteredCities(currentValue).length > 0 && (
+                                              <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                                                {filteredCities(currentValue).map((city) => (
+                                                  <button
+                                                    key={city}
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault()
+                                                      handleCellChange(row.id, col.key, city)
+                                                      setActiveAreaDropdown(null)
+                                                    }}
+                                                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                                  >
+                                                    {city}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            )}
                                         </div>
                                       )
                                     ) : isNumberField ? (
@@ -1646,39 +1822,52 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             )
                                             setActiveStoreDropdown(`${row.id}-${col.key}`)
                                           }}
-                                          onFocus={() => setActiveStoreDropdown(`${row.id}-${col.key}`)}
+                                          onFocus={() =>
+                                            setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                          }
                                           onBlur={() => {
                                             setTimeout(() => setActiveStoreDropdown(null), 200)
                                           }}
                                           className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                           placeholder="Store no."
                                         />
-                                        {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByNumber(currentValue).length > 0 && (
-                                          <div
-                                            className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                            onMouseDown={(e) => e.preventDefault()}
-                                          >
-                                            {filteredStoresByNumber(currentValue).map((store) => (
-                                              <button
-                                                key={store.store_id}
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.preventDefault()
-                                                  handleCellChange(row.id, col.key, store.number)
-                                                  // Auto-fill store name if column exists
-                                                  const storeNameCol = columns.find((c) => String(c.header || '').toUpperCase() === 'STORE NAME' || String(c.header || '').toUpperCase() === 'STORENAME')
-                                                  if (storeNameCol) {
-                                                    handleCellChange(row.id, storeNameCol.key, store.name)
-                                                  }
-                                                  setActiveStoreDropdown(null)
-                                                }}
-                                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                              >
-                                                {store.number} - {store.name}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        )}
+                                        {activeStoreDropdown === `${row.id}-${col.key}` &&
+                                          filteredStoresByNumber(currentValue).length > 0 && (
+                                            <div
+                                              className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                              onMouseDown={(e) => e.preventDefault()}
+                                            >
+                                              {filteredStoresByNumber(currentValue).map((store) => (
+                                                <button
+                                                  key={store.store_id}
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.preventDefault()
+                                                    handleCellChange(row.id, col.key, store.number)
+                                                    // Auto-fill store name if column exists
+                                                    const storeNameCol = columns.find(
+                                                      (c) =>
+                                                        String(c.header || '').toUpperCase() ===
+                                                          'STORE NAME' ||
+                                                        String(c.header || '').toUpperCase() ===
+                                                          'STORENAME',
+                                                    )
+                                                    if (storeNameCol) {
+                                                      handleCellChange(
+                                                        row.id,
+                                                        storeNameCol.key,
+                                                        store.name,
+                                                      )
+                                                    }
+                                                    setActiveStoreDropdown(null)
+                                                  }}
+                                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                                >
+                                                  {store.number} - {store.name}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
                                       </div>
                                     ) : isNameField ? (
                                       <div className="relative">
@@ -1689,40 +1878,55 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             handleCellChange(row.id, col.key, e.target.value)
                                             setActiveStoreDropdown(`${row.id}-${col.key}`)
                                           }}
-                                          onFocus={() => setActiveStoreDropdown(`${row.id}-${col.key}`)}
+                                          onFocus={() =>
+                                            setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                          }
                                           onBlur={() => {
                                             setTimeout(() => setActiveStoreDropdown(null), 200)
                                           }}
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Store name"
                                         />
-                                        {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByName(currentValue).length > 0 && (
-                                          <div
-                                            className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                            onMouseDown={(e) => e.preventDefault()}
-                                          >
-                                            {filteredStoresByName(currentValue).map((store) => (
-                                              <button
-                                                key={store.store_id}
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.preventDefault()
-                                                  handleCellChange(row.id, col.key, store.name)
-                                                  // Auto-fill store number if column exists
-                                                  const storeNumberCol = columns.find((c) => String(c.header || '').toUpperCase() === 'STORE NO.' || String(c.header || '').toUpperCase() === 'STORE NUMBER')
-                                                  if (storeNumberCol) {
-                                                    handleCellChange(row.id, storeNumberCol.key, store.number)
-                                                  }
-                                                  setActiveStoreDropdown(null)
-                                                }}
-                                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                              >
-                                                <div className="font-semibold">{store.name}</div>
-                                                <div className="text-[10px] text-gray-500">{store.number}</div>
-                                              </button>
-                                            ))}
-                                          </div>
-                                        )}
+                                        {activeStoreDropdown === `${row.id}-${col.key}` &&
+                                          filteredStoresByName(currentValue).length > 0 && (
+                                            <div
+                                              className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                              onMouseDown={(e) => e.preventDefault()}
+                                            >
+                                              {filteredStoresByName(currentValue).map((store) => (
+                                                <button
+                                                  key={store.store_id}
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.preventDefault()
+                                                    handleCellChange(row.id, col.key, store.name)
+                                                    // Auto-fill store number if column exists
+                                                    const storeNumberCol = columns.find(
+                                                      (c) =>
+                                                        String(c.header || '').toUpperCase() ===
+                                                          'STORE NO.' ||
+                                                        String(c.header || '').toUpperCase() ===
+                                                          'STORE NUMBER',
+                                                    )
+                                                    if (storeNumberCol) {
+                                                      handleCellChange(
+                                                        row.id,
+                                                        storeNumberCol.key,
+                                                        store.number,
+                                                      )
+                                                    }
+                                                    setActiveStoreDropdown(null)
+                                                  }}
+                                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                                >
+                                                  <div className="font-semibold">{store.name}</div>
+                                                  <div className="text-[10px] text-gray-500">
+                                                    {store.number}
+                                                  </div>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
                                       </div>
                                     ) : isNumericField ? (
                                       (() => {
@@ -1732,21 +1936,40 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           <input
                                             type="text"
                                             inputMode="decimal"
-                                            value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
+                                            value={
+                                              isFocused
+                                                ? String(currentValue)
+                                                : formatNumberInput(currentValue)
+                                            }
                                             onChange={(e) => {
-                                              const nextValue = e.target.value.replace(/[^0-9.]/g, '')
+                                              const nextValue = e.target.value.replace(
+                                                /[^0-9.]/g,
+                                                '',
+                                              )
                                               // Keep as string if it ends with dot or has decimal being typed
-                                              if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                              if (
+                                                nextValue.endsWith('.') ||
+                                                (nextValue.includes('.') &&
+                                                  nextValue.split('.')[1].length <= 2)
+                                              ) {
                                                 handleCellChange(row.id, col.key, nextValue)
                                               } else {
-                                                handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                                handleCellChange(
+                                                  row.id,
+                                                  col.key,
+                                                  nextValue === '' ? 0 : Number(nextValue),
+                                                )
                                               }
                                             }}
                                             onFocus={() => setFocusedNumericField(fieldKey)}
                                             onBlur={(e) => {
                                               setFocusedNumericField(null)
                                               const formatted = formatNumberInput(currentValue)
-                                              handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                              handleCellChange(
+                                                row.id,
+                                                col.key,
+                                                parseDecimalInput(formatted),
+                                              )
                                             }}
                                             className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                             placeholder="0.00"
@@ -1757,15 +1980,21 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       <input
                                         type="text"
                                         value={currentValue}
-                                        onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
+                                        onChange={(e) =>
+                                          handleCellChange(row.id, col.key, e.target.value)
+                                        }
                                         className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
-                                        placeholder={typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key) || 'Enter value'}
+                                        placeholder={
+                                          typeof col.header === 'object'
+                                            ? col.header.header || col.header.key || String(col.key)
+                                            : String(col.header || col.key) || 'Enter value'
+                                        }
                                       />
                                     )}
                                   </td>
                                 )
                               }
-                              
+
                               // Parts columns - render for each part
                               if (isPartsDescField) {
                                 const partValue = part.values?.partsDescription || ''
@@ -1775,7 +2004,14 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       <input
                                         type="text"
                                         value={partValue}
-                                        onChange={(e) => handlePartChange(row.id, part.id, 'partsDescription', e.target.value)}
+                                        onChange={(e) =>
+                                          handlePartChange(
+                                            row.id,
+                                            part.id,
+                                            'partsDescription',
+                                            e.target.value,
+                                          )
+                                        }
                                         className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                         placeholder="Loading parts..."
                                         disabled
@@ -1786,45 +2022,59 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           type="text"
                                           value={partValue}
                                           onChange={(e) => {
-                                            handlePartChange(row.id, part.id, 'partsDescription', e.target.value)
+                                            handlePartChange(
+                                              row.id,
+                                              part.id,
+                                              'partsDescription',
+                                              e.target.value,
+                                            )
                                             setActivePartsDropdown(`${row.id}-${part.id}`)
                                           }}
-                                          onFocus={() => setActivePartsDropdown(`${row.id}-${part.id}`)}
+                                          onFocus={() =>
+                                            setActivePartsDropdown(`${row.id}-${part.id}`)
+                                          }
                                           onBlur={() => {
                                             setTimeout(() => setActivePartsDropdown(null), 200)
                                           }}
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Search or type part"
                                         />
-                                        {activePartsDropdown === `${row.id}-${part.id}` && filteredParts(partValue).length > 0 && (
-                                          <div 
-                                            className="absolute left-0 top-full z-20 mt-1 max-h-32 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                            onMouseDown={(e) => e.preventDefault()}
-                                          >
-                                            {filteredParts(partValue).map((partData) => (
-                                              <button
-                                                key={partData.part_id}
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.preventDefault()
-                                                  handlePartSelect(row.id, part.id, partData)
-                                                  setActivePartsDropdown(null)
-                                                }}
-                                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                              >
-                                                <div className="font-semibold">{partData.name}</div>
-                                                <div className="text-[10px] text-gray-500">{partData.description}</div>
-                                                <div className="text-[10px] text-gray-400">Price: {partData.price}</div>
-                                              </button>
-                                            ))}
-                                          </div>
-                                        )}
+                                        {activePartsDropdown === `${row.id}-${part.id}` &&
+                                          filteredParts(partValue).length > 0 && (
+                                            <div
+                                              className="absolute left-0 top-full z-20 mt-1 max-h-32 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                              onMouseDown={(e) => e.preventDefault()}
+                                            >
+                                              {filteredParts(partValue).map((partData) => (
+                                                <button
+                                                  key={partData.part_id}
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.preventDefault()
+                                                    handlePartSelect(row.id, part.id, partData)
+                                                    setActivePartsDropdown(null)
+                                                  }}
+                                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                                >
+                                                  <div className="font-semibold">
+                                                    {partData.name}
+                                                  </div>
+                                                  <div className="text-[10px] text-gray-500">
+                                                    {partData.description}
+                                                  </div>
+                                                  <div className="text-[10px] text-gray-400">
+                                                    Price: {partData.price}
+                                                  </div>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
                                       </div>
                                     )}
                                   </td>
                                 )
                               }
-                              
+
                               if (isPartsQtyField) {
                                 const qtyValue = part.values?.partsQty || 0
                                 const fieldKey = `${row.id}-${part.id}-partsQty`
@@ -1834,16 +2084,28 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     <input
                                       type="text"
                                       inputMode="numeric"
-                                      value={isFocused ? String(qtyValue) : formatQuantityInput(qtyValue)}
+                                      value={
+                                        isFocused ? String(qtyValue) : formatQuantityInput(qtyValue)
+                                      }
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9]/g, '')
-                                        handlePartChange(row.id, part.id, 'partsQty', nextValue === '' ? 0 : Number(nextValue))
+                                        handlePartChange(
+                                          row.id,
+                                          part.id,
+                                          'partsQty',
+                                          nextValue === '' ? 0 : Number(nextValue),
+                                        )
                                       }}
                                       onFocus={() => setFocusedNumericField(fieldKey)}
                                       onBlur={(e) => {
                                         setFocusedNumericField(null)
                                         const formatted = formatQuantityInput(qtyValue)
-                                        handlePartChange(row.id, part.id, 'partsQty', parseDecimalInput(formatted))
+                                        handlePartChange(
+                                          row.id,
+                                          part.id,
+                                          'partsQty',
+                                          parseDecimalInput(formatted),
+                                        )
                                       }}
                                       className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="0"
@@ -1851,7 +2113,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                   </td>
                                 )
                               }
-                              
+
                               if (isPriceField) {
                                 const priceValue = part.values?.price || 0
                                 const fieldKey = `${row.id}-${part.id}-price`
@@ -1861,21 +2123,39 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     <input
                                       type="text"
                                       inputMode="decimal"
-                                      value={isFocused ? String(priceValue) : formatNumberInput(priceValue)}
+                                      value={
+                                        isFocused
+                                          ? String(priceValue)
+                                          : formatNumberInput(priceValue)
+                                      }
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9.]/g, '')
                                         // Keep as string if it ends with dot or has decimal being typed
-                                        if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                        if (
+                                          nextValue.endsWith('.') ||
+                                          (nextValue.includes('.') &&
+                                            nextValue.split('.')[1].length <= 2)
+                                        ) {
                                           handlePartChange(row.id, part.id, 'price', nextValue)
                                         } else {
-                                          handlePartChange(row.id, part.id, 'price', nextValue === '' ? 0 : Number(nextValue))
+                                          handlePartChange(
+                                            row.id,
+                                            part.id,
+                                            'price',
+                                            nextValue === '' ? 0 : Number(nextValue),
+                                          )
                                         }
                                       }}
                                       onFocus={() => setFocusedNumericField(fieldKey)}
                                       onBlur={(e) => {
                                         setFocusedNumericField(null)
                                         const formatted = formatNumberInput(priceValue)
-                                        handlePartChange(row.id, part.id, 'price', parseDecimalInput(formatted))
+                                        handlePartChange(
+                                          row.id,
+                                          part.id,
+                                          'price',
+                                          parseDecimalInput(formatted),
+                                        )
                                       }}
                                       className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="0.00"
@@ -1883,7 +2163,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                   </td>
                                 )
                               }
-                              
+
                               if (isSubtotalField) {
                                 return (
                                   <td key={col.key} className="px-3 py-2 font-mono">
@@ -1901,7 +2181,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                   </td>
                                 )
                               }
-                              
+
                               return <td key={col.key} className="px-6 py-3"></td>
                             })}
                             {isFirstPart && (
@@ -1925,9 +2205,25 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       )}
                                     </button>
                                     {showColorPicker === row.id && (
-                                      <div ref={colorPickerRef} className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
+                                      <div
+                                        ref={colorPickerRef}
+                                        className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200"
+                                      >
                                         <div className="grid grid-cols-6 gap-1 mb-2">
-                                          {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
+                                          {[
+                                            '#ef4444',
+                                            '#f97316',
+                                            '#eab308',
+                                            '#22c55e',
+                                            '#06b6d4',
+                                            '#3b82f6',
+                                            '#8b5cf6',
+                                            '#ec4899',
+                                            '#f43f5e',
+                                            '#84cc16',
+                                            '#14b8a6',
+                                            '#6366f1',
+                                          ].map((color) => (
                                             <button
                                               key={color}
                                               onClick={() => handleRowColorChange(row.id, color)}
@@ -1941,7 +2237,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           <input
                                             type="color"
                                             value={row.color || '#ff0000'}
-                                            onChange={(e) => handleCustomColorChange(row.id, e.target.value)}
+                                            onChange={(e) =>
+                                              handleCustomColorChange(row.id, e.target.value)
+                                            }
                                             className="w-8 h-8 rounded cursor-pointer"
                                           />
                                           <span className="text-xs text-gray-600">Custom</span>
@@ -1988,16 +2286,20 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                           const isNumberField = isStoreNumberColumn(col)
                           const isNameField = isStoreNameColumn(col)
                           const isAreaField = String(col.header || '').toUpperCase() === 'AREA'
-                          const isPartsDescField = String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION'
+                          const isPartsDescField =
+                            String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION'
                           const isNumericField = isNumericColumn(col)
                           const currentValue = row.values?.[col.key] ?? ''
                           const isServiceColumn = Boolean(col.serviceMeta)
-                          const isMoneyInputColumn = isSalesColumn(col) || isAdditionalSalesColumn(col) || isMaterialCostColumn(col)
+                          const isMoneyInputColumn =
+                            isSalesColumn(col) ||
+                            isAdditionalSalesColumn(col) ||
+                            isMaterialCostColumn(col)
                           const isTotalField = isTotalSalesColumn(col)
                           const isDateInputColumn = isDateColumn(col)
                           const isVatColumn = col.key === 'vat'
                           const isQtyInputColumn = isQuantityColumn(col)
-                          
+
                           return (
                             <td
                               key={colIdx}
@@ -2029,39 +2331,52 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                     placeholder="Store no."
                                   />
-                                  {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByNumber(currentValue).length > 0 && (
-                                    <div
-                                      className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                      onMouseDown={(e) => e.preventDefault()}
-                                    >
-                                      {filteredStoresByNumber(currentValue).map((store) => (
-                                        <button
-                                          key={store.store_id}
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.preventDefault()
-                                            handleCellChange(row.id, col.key, store.number)
-                                            // Auto-fill store name if column exists
-                                            const storeNameCol = columns.find((c) => String(c.header || '').toUpperCase() === 'STORE NAME' || String(c.header || '').toUpperCase() === 'STORENAME')
-                                            if (storeNameCol) {
-                                              handleCellChange(row.id, storeNameCol.key, store.name)
-                                            }
-                                            setActiveStoreDropdown(null)
-                                          }}
-                                          className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                        >
-                                          {store.number} - {store.name}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
+                                  {activeStoreDropdown === `${row.id}-${col.key}` &&
+                                    filteredStoresByNumber(currentValue).length > 0 && (
+                                      <div
+                                        className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                      >
+                                        {filteredStoresByNumber(currentValue).map((store) => (
+                                          <button
+                                            key={store.store_id}
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault()
+                                              handleCellChange(row.id, col.key, store.number)
+                                              // Auto-fill store name if column exists
+                                              const storeNameCol = columns.find(
+                                                (c) =>
+                                                  String(c.header || '').toUpperCase() ===
+                                                    'STORE NAME' ||
+                                                  String(c.header || '').toUpperCase() ===
+                                                    'STORENAME',
+                                              )
+                                              if (storeNameCol) {
+                                                handleCellChange(
+                                                  row.id,
+                                                  storeNameCol.key,
+                                                  store.name,
+                                                )
+                                              }
+                                              setActiveStoreDropdown(null)
+                                            }}
+                                            className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                          >
+                                            {store.number} - {store.name}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                 </div>
                               ) : isAreaField ? (
                                 loadingCities ? (
                                   <input
                                     type="text"
                                     value={currentValue}
-                                    onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
+                                    onChange={(e) =>
+                                      handleCellChange(row.id, col.key, e.target.value)
+                                    }
                                     className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                     placeholder="Loading cities..."
                                     disabled
@@ -2082,24 +2397,25 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="Search or type area"
                                     />
-                                    {activeAreaDropdown === row.id && filteredCities(currentValue).length > 0 && (
-                                      <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
-                                        {filteredCities(currentValue).map((city) => (
-                                          <button
-                                            key={city}
-                                            type="button"
-                                            onMouseDown={(e) => {
-                                              e.preventDefault()
-                                              handleCellChange(row.id, col.key, city)
-                                              setActiveAreaDropdown(null)
-                                            }}
-                                            className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                          >
-                                            {city}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {activeAreaDropdown === row.id &&
+                                      filteredCities(currentValue).length > 0 && (
+                                        <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                                          {filteredCities(currentValue).map((city) => (
+                                            <button
+                                              key={city}
+                                              type="button"
+                                              onMouseDown={(e) => {
+                                                e.preventDefault()
+                                                handleCellChange(row.id, col.key, city)
+                                                setActiveAreaDropdown(null)
+                                              }}
+                                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                            >
+                                              {city}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
                                   </div>
                                 )
                               ) : isPartsDescField ? (
@@ -2107,7 +2423,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                   <input
                                     type="text"
                                     value={currentValue}
-                                    onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
+                                    onChange={(e) =>
+                                      handleCellChange(row.id, col.key, e.target.value)
+                                    }
                                     className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                     placeholder="Loading parts..."
                                     disabled
@@ -2128,53 +2446,77 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="Search or type part"
                                     />
-                                    {activePartsDropdown === row.id && filteredParts(currentValue).length > 0 && (
-                                      <div className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
-                                        {filteredParts(currentValue).map((part) => (
-                                          <button
-                                            key={part.part_id}
-                                            type="button"
-                                            onMouseDown={(e) => {
-                                              e.preventDefault()
-                                              const partsDescCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PARTS DESCRIPTION')
-                                              const partsQtyCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PARTS QTY.')
-                                              const priceCol = columns.find((col) => String(col.header || '').toUpperCase() === 'PRICE')
-                                              const subtotalCol = columns.find((col) => String(col.header || '').toUpperCase() === 'SUBTOTAL')
-                                              
-                                              const nextValues = { ...row.values }
-                                              if (partsDescCol) nextValues[partsDescCol.key] = part.name
-                                              if (partsQtyCol) nextValues[partsQtyCol.key] = 1
-                                              if (priceCol) nextValues[priceCol.key] = part.price
-                                              if (subtotalCol) {
-                                                const partsQty = 1
-                                                const price = Number(part.price || 0)
-                                                nextValues[subtotalCol.key] = partsQty * price
-                                              }
-                                              
-                                              setRows((currentRows) =>
-                                                currentRows.map((r) => {
-                                                  if (r.id !== row.id) return r
-                                                  return { ...r, values: nextValues }
-                                                })
-                                              )
-                                              setActivePartsDropdown(null)
-                                            }}
-                                            className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                          >
-                                            <div className="font-semibold">{part.name}</div>
-                                            <div className="text-[10px] text-gray-500">{part.description}</div>
-                                            <div className="text-[10px] text-gray-400">Price: {part.price}</div>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {activePartsDropdown === row.id &&
+                                      filteredParts(currentValue).length > 0 && (
+                                        <div className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                                          {filteredParts(currentValue).map((part) => (
+                                            <button
+                                              key={part.part_id}
+                                              type="button"
+                                              onMouseDown={(e) => {
+                                                e.preventDefault()
+                                                const partsDescCol = columns.find(
+                                                  (col) =>
+                                                    String(col.header || '').toUpperCase() ===
+                                                    'PARTS DESCRIPTION',
+                                                )
+                                                const partsQtyCol = columns.find(
+                                                  (col) =>
+                                                    String(col.header || '').toUpperCase() ===
+                                                    'PARTS QTY.',
+                                                )
+                                                const priceCol = columns.find(
+                                                  (col) =>
+                                                    String(col.header || '').toUpperCase() ===
+                                                    'PRICE',
+                                                )
+                                                const subtotalCol = columns.find(
+                                                  (col) =>
+                                                    String(col.header || '').toUpperCase() ===
+                                                    'SUBTOTAL',
+                                                )
+
+                                                const nextValues = { ...row.values }
+                                                if (partsDescCol)
+                                                  nextValues[partsDescCol.key] = part.name
+                                                if (partsQtyCol) nextValues[partsQtyCol.key] = 1
+                                                if (priceCol) nextValues[priceCol.key] = part.price
+                                                if (subtotalCol) {
+                                                  const partsQty = 1
+                                                  const price = Number(part.price || 0)
+                                                  nextValues[subtotalCol.key] = partsQty * price
+                                                }
+
+                                                setRows((currentRows) =>
+                                                  currentRows.map((r) => {
+                                                    if (r.id !== row.id) return r
+                                                    return { ...r, values: nextValues }
+                                                  }),
+                                                )
+                                                setActivePartsDropdown(null)
+                                              }}
+                                              className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                            >
+                                              <div className="font-semibold">{part.name}</div>
+                                              <div className="text-[10px] text-gray-500">
+                                                {part.description}
+                                              </div>
+                                              <div className="text-[10px] text-gray-400">
+                                                Price: {part.price}
+                                              </div>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
                                   </div>
                                 )
                               ) : isDateInputColumn ? (
                                 <input
                                   type="date"
                                   value={currentValue || ''}
-                                  onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
+                                  onChange={(e) =>
+                                    handleCellChange(row.id, col.key, e.target.value)
+                                  }
                                   className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                 />
                               ) : isVatColumn ? (
@@ -2189,7 +2531,11 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     <input
                                       type="text"
                                       inputMode="numeric"
-                                      value={isFocused ? String(currentValue) : formatQuantityInput(currentValue)}
+                                      value={
+                                        isFocused
+                                          ? String(currentValue)
+                                          : formatQuantityInput(currentValue)
+                                      }
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9]/g, '')
                                         handleCellChange(
@@ -2202,7 +2548,11 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       onBlur={(e) => {
                                         setFocusedNumericField(null)
                                         const formatted = formatQuantityInput(currentValue)
-                                        handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                        handleCellChange(
+                                          row.id,
+                                          col.key,
+                                          parseDecimalInput(formatted),
+                                        )
                                       }}
                                       className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="0"
@@ -2217,21 +2567,37 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     <input
                                       type="text"
                                       inputMode="decimal"
-                                      value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
+                                      value={
+                                        isFocused
+                                          ? String(currentValue)
+                                          : formatNumberInput(currentValue)
+                                      }
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9.]/g, '')
                                         // Keep as string if it ends with dot or has decimal being typed
-                                        if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                        if (
+                                          nextValue.endsWith('.') ||
+                                          (nextValue.includes('.') &&
+                                            nextValue.split('.')[1].length <= 2)
+                                        ) {
                                           handleCellChange(row.id, col.key, nextValue)
                                         } else {
-                                          handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                          handleCellChange(
+                                            row.id,
+                                            col.key,
+                                            nextValue === '' ? 0 : Number(nextValue),
+                                          )
                                         }
                                       }}
                                       onFocus={() => setFocusedNumericField(fieldKey)}
                                       onBlur={(e) => {
                                         setFocusedNumericField(null)
                                         const formatted = formatNumberInput(currentValue)
-                                        handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                        handleCellChange(
+                                          row.id,
+                                          col.key,
+                                          parseDecimalInput(formatted),
+                                        )
                                       }}
                                       className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="0.00"
@@ -2247,7 +2613,9 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                   <input
                                     type="checkbox"
                                     checked={Boolean(currentValue)}
-                                    onChange={(e) => handleCellChange(row.id, col.key, e.target.checked)}
+                                    onChange={(e) =>
+                                      handleCellChange(row.id, col.key, e.target.checked)
+                                    }
                                     className="h-4 w-4 rounded border-gray-300 text-red-500 focus:ring-red-500"
                                   />
                                 </div>
@@ -2267,32 +2635,43 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                     placeholder="Store name"
                                   />
-                                  {activeStoreDropdown === `${row.id}-${col.key}` && filteredStoresByName(currentValue).length > 0 && (
-                                    <div
-                                      className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                      onMouseDown={(e) => e.preventDefault()}
-                                    >
-                                      {filteredStoresByName(currentValue).map((store) => (
-                                        <button
-                                          key={store.store_id}
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.preventDefault()
-                                            handleCellChange(row.id, col.key, store.name)
-                                            // Auto-fill store number if column exists
-                                            const storeNumberCol = columns.find((c) => String(c.header || '').toUpperCase() === 'STORE NO.' || String(c.header || '').toUpperCase() === 'STORE NUMBER')
-                                            if (storeNumberCol) {
-                                              handleCellChange(row.id, storeNumberCol.key, store.number)
-                                            }
-                                            setActiveStoreDropdown(null)
-                                          }}
-                                          className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                        >
-                                          {store.number} - {store.name}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
+                                  {activeStoreDropdown === `${row.id}-${col.key}` &&
+                                    filteredStoresByName(currentValue).length > 0 && (
+                                      <div
+                                        className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                      >
+                                        {filteredStoresByName(currentValue).map((store) => (
+                                          <button
+                                            key={store.store_id}
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault()
+                                              handleCellChange(row.id, col.key, store.name)
+                                              // Auto-fill store number if column exists
+                                              const storeNumberCol = columns.find(
+                                                (c) =>
+                                                  String(c.header || '').toUpperCase() ===
+                                                    'STORE NO.' ||
+                                                  String(c.header || '').toUpperCase() ===
+                                                    'STORE NUMBER',
+                                              )
+                                              if (storeNumberCol) {
+                                                handleCellChange(
+                                                  row.id,
+                                                  storeNumberCol.key,
+                                                  store.number,
+                                                )
+                                              }
+                                              setActiveStoreDropdown(null)
+                                            }}
+                                            className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                          >
+                                            {store.number} - {store.name}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                 </div>
                               ) : isNumericField ? (
                                 (() => {
@@ -2302,21 +2681,37 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     <input
                                       type="text"
                                       inputMode="decimal"
-                                      value={isFocused ? String(currentValue) : formatNumberInput(currentValue)}
+                                      value={
+                                        isFocused
+                                          ? String(currentValue)
+                                          : formatNumberInput(currentValue)
+                                      }
                                       onChange={(e) => {
                                         const nextValue = e.target.value.replace(/[^0-9.]/g, '')
                                         // Keep as string if it ends with dot or has decimal being typed
-                                        if (nextValue.endsWith('.') || (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)) {
+                                        if (
+                                          nextValue.endsWith('.') ||
+                                          (nextValue.includes('.') &&
+                                            nextValue.split('.')[1].length <= 2)
+                                        ) {
                                           handleCellChange(row.id, col.key, nextValue)
                                         } else {
-                                          handleCellChange(row.id, col.key, nextValue === '' ? 0 : Number(nextValue))
+                                          handleCellChange(
+                                            row.id,
+                                            col.key,
+                                            nextValue === '' ? 0 : Number(nextValue),
+                                          )
                                         }
                                       }}
                                       onFocus={() => setFocusedNumericField(fieldKey)}
                                       onBlur={(e) => {
                                         setFocusedNumericField(null)
                                         const formatted = formatNumberInput(currentValue)
-                                        handleCellChange(row.id, col.key, parseDecimalInput(formatted))
+                                        handleCellChange(
+                                          row.id,
+                                          col.key,
+                                          parseDecimalInput(formatted),
+                                        )
                                       }}
                                       className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="0.00"
@@ -2327,96 +2722,121 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                 <input
                                   type="text"
                                   value={currentValue}
-                                  onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
+                                  onChange={(e) =>
+                                    handleCellChange(row.id, col.key, e.target.value)
+                                  }
                                   className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
-                                  placeholder={typeof col.header === 'object' ? col.header.header || col.header.key || String(col.key) : String(col.header || col.key)}
+                                  placeholder={
+                                    typeof col.header === 'object'
+                                      ? col.header.header || col.header.key || String(col.key)
+                                      : String(col.header || col.key)
+                                  }
                                 />
                               )}
                             </td>
                           )
                         })}
                         <td className="w-16 px-2 py-2">
-                            <div className="flex items-center gap-1">
-                              <div className="relative">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setShowColorPicker(row.id)
-                                  }}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-gray-600 hover:bg-gray-100 transition-colors"
-                                  title="Set row color"
-                                >
-                                  <Palette size={14} />
-                                  {row.color && (
-                                    <div
-                                      className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
-                                      style={{ backgroundColor: row.color }}
-                                    />
-                                  )}
-                                </button>
-                                {showColorPicker === row.id && (
-                                  <div ref={colorPickerRef} className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200">
-                                    <div className="grid grid-cols-6 gap-1 mb-2">
-                                      {['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'].map(color => (
-                                        <button
-                                          key={color}
-                                          onClick={() => handleRowColorChange(row.id, color)}
-                                          className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
-                                          style={{ backgroundColor: color }}
-                                          title={color}
-                                        />
-                                      ))}
-                                    </div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <input
-                                        type="color"
-                                        value={row.color || '#ff0000'}
-                                        onChange={(e) => handleCustomColorChange(row.id, e.target.value)}
-                                        className="w-8 h-8 rounded cursor-pointer"
-                                      />
-                                      <span className="text-xs text-gray-600">Custom</span>
-                                    </div>
-                                    {row.color && (
-                                      <button
-                                        onClick={() => handleRowColorRemove(row.id)}
-                                        className="w-full text-xs text-red-600 hover:text-red-800"
-                                      >
-                                        Remove Color
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                          <div className="flex items-center gap-1">
+                            <div className="relative">
                               <button
-                                type="button"
-                                onClick={() => handleDeleteRow(row.id)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-white bg-red-600 hover:bg-red-700 transition-colors"
-                                aria-label="Delete row"
-                                title="Delete row"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setShowColorPicker(row.id)
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-gray-600 hover:bg-gray-100 transition-colors"
+                                title="Set row color"
                               >
-                                <Trash2 size={14} />
+                                <Palette size={14} />
+                                {row.color && (
+                                  <div
+                                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
+                                    style={{ backgroundColor: row.color }}
+                                  />
+                                )}
                               </button>
+                              {showColorPicker === row.id && (
+                                <div
+                                  ref={colorPickerRef}
+                                  className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-3 z-50 border border-gray-200"
+                                >
+                                  <div className="grid grid-cols-6 gap-1 mb-2">
+                                    {[
+                                      '#ef4444',
+                                      '#f97316',
+                                      '#eab308',
+                                      '#22c55e',
+                                      '#06b6d4',
+                                      '#3b82f6',
+                                      '#8b5cf6',
+                                      '#ec4899',
+                                      '#f43f5e',
+                                      '#84cc16',
+                                      '#14b8a6',
+                                      '#6366f1',
+                                    ].map((color) => (
+                                      <button
+                                        key={color}
+                                        onClick={() => handleRowColorChange(row.id, color)}
+                                        className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                                        style={{ backgroundColor: color }}
+                                        title={color}
+                                      />
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <input
+                                      type="color"
+                                      value={row.color || '#ff0000'}
+                                      onChange={(e) =>
+                                        handleCustomColorChange(row.id, e.target.value)
+                                      }
+                                      className="w-8 h-8 rounded cursor-pointer"
+                                    />
+                                    <span className="text-xs text-gray-600">Custom</span>
+                                  </div>
+                                  {row.color && (
+                                    <button
+                                      onClick={() => handleRowColorRemove(row.id)}
+                                      className="w-full text-xs text-red-600 hover:text-red-800"
+                                    >
+                                      Remove Color
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          </td>
-                        </tr>
-                    )}
-                    {hasPartsColumns && (addPartRowVisible === row.id || addPartRowHiding === row.id) && (
-                      <tr 
-                        data-row-id={row.id}
-                        onMouseEnter={() => handleRowMouseEnter(row.id)}
-                        onMouseLeave={() => handleRowMouseLeave()}
-                        className={`add-part-row ${addPartRowVisible === row.id ? 'visible' : addPartRowHiding === row.id ? 'hiding' : ''}`}
-                      >
-                        <td colSpan={columns.length + 1} className="px-6 py-2 bg-gray-50">
-                          <button
-                            onClick={() => addPart(row.id)}
-                            className="inline-flex items-center rounded border border-green-200 bg-green-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
-                          >
-                            + Add Part
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRow(row.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded border cursor-pointer text-white bg-red-600 hover:bg-red-700 transition-colors"
+                              aria-label="Delete row"
+                              title="Delete row"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}
+                    {hasPartsColumns &&
+                      (addPartRowVisible === row.id || addPartRowHiding === row.id) && (
+                        <tr
+                          data-row-id={row.id}
+                          onMouseEnter={() => handleRowMouseEnter(row.id)}
+                          onMouseLeave={() => handleRowMouseLeave()}
+                          className={`add-part-row ${addPartRowVisible === row.id ? 'visible' : addPartRowHiding === row.id ? 'hiding' : ''}`}
+                        >
+                          <td colSpan={columns.length + 1} className="px-6 py-2 bg-gray-50">
+                            <button
+                              onClick={() => addPart(row.id)}
+                              className="inline-flex items-center rounded border border-green-200 bg-green-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
+                            >
+                              + Add Part
+                            </button>
+                          </td>
+                        </tr>
+                      )}
                   </React.Fragment>
                 )
               })
@@ -2457,7 +2877,10 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   )
 })
 
-const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, saving, onTotalsChange }) => {
+const ItemizedPartsTable = React.forwardRef(function ItemizedPartsTable(
+  { statementId, documentMeta, onSave, initialRows, saving, onTotalsChange },
+  ref,
+) {
   const [rows, setRows] = useState(() => {
     if (Array.isArray(initialRows) && initialRows.length > 0) {
       return initialRows.map((r, i) => ({
@@ -2466,20 +2889,22 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
         parts: r.parts || [],
       }))
     }
-    return [{ 
-      id: 'row-1', 
-      values: { 
-        invoice: '', 
-        storeNumber: '', 
-        storeName: '', 
-        ticketNumber: '', 
-        description: '', 
-        servicesDate: '', 
-        workDone: 'REPAIR AND MAINTENANCE',
-        totalInvoiceAmount: 0 
-      }, 
-      parts: [] 
-    }]
+    return [
+      {
+        id: 'row-1',
+        values: {
+          invoice: '',
+          storeNumber: '',
+          storeName: '',
+          ticketNumber: '',
+          description: '',
+          servicesDate: '',
+          workDone: 'REPAIR AND MAINTENANCE',
+          totalInvoiceAmount: 0,
+        },
+        parts: [],
+      },
+    ]
   })
   const [parts, setParts] = useState([])
   const [loadingParts, setLoadingParts] = useState(true)
@@ -2503,9 +2928,10 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
 
   const filteredParts = (searchTerm) => {
     if (!searchTerm || searchTerm.trim() === '') return parts
-    return parts.filter((part) => 
-      String(part.name).toLowerCase().includes(String(searchTerm).toLowerCase()) ||
-      String(part.description).toLowerCase().includes(String(searchTerm).toLowerCase())
+    return parts.filter(
+      (part) =>
+        String(part.name).toLowerCase().includes(String(searchTerm).toLowerCase()) ||
+        String(part.description).toLowerCase().includes(String(searchTerm).toLowerCase()),
     )
   }
 
@@ -2528,22 +2954,25 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
           const updatedParts = row.parts.map((part) => {
             if (part.id === partId) {
               const newPartValues = { ...part.values, [field]: value }
-              
+
               // Auto-compute subtotal
               if (field === 'partsQty' || field === 'price') {
                 const partsQty = Number(newPartValues.partsQty || 0)
                 const price = Number(newPartValues.price || 0)
                 newPartValues.subtotal = partsQty * price
               }
-              
+
               return { ...part, values: newPartValues }
             }
             return part
           })
-          
+
           // Recalculate total invoice amount
-          const totalInvoiceAmount = updatedParts.reduce((sum, part) => sum + (Number(part.values.subtotal) || 0), 0)
-          
+          const totalInvoiceAmount = updatedParts.reduce(
+            (sum, part) => sum + (Number(part.values.subtotal) || 0),
+            0,
+          )
+
           return { ...row, parts: updatedParts, values: { ...row.values, totalInvoiceAmount } }
         }
         return row
@@ -2562,16 +2991,19 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                 partsDescription: part.name,
                 partsQty: 1,
                 price: part.price,
-                subtotal: Number(part.price || 0)
+                subtotal: Number(part.price || 0),
               }
               return { ...partItem, values: newPartValues }
             }
             return partItem
           })
-          
+
           // Recalculate total invoice amount
-          const totalInvoiceAmount = updatedParts.reduce((sum, part) => sum + (Number(part.values.subtotal) || 0), 0)
-          
+          const totalInvoiceAmount = updatedParts.reduce(
+            (sum, part) => sum + (Number(part.values.subtotal) || 0),
+            0,
+          )
+
           return { ...row, parts: updatedParts, values: { ...row.values, totalInvoiceAmount } }
         }
         return row
@@ -2582,19 +3014,19 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
   const addRow = () => {
     setRows((prev) => [
       ...prev,
-      { 
-        id: `row-${prev.length + 1}`, 
-        values: { 
-          invoice: '', 
-          storeNumber: '', 
-          storeName: '', 
-          ticketNumber: '', 
-          description: '', 
-          servicesDate: '', 
+      {
+        id: `row-${prev.length + 1}`,
+        values: {
+          invoice: '',
+          storeNumber: '',
+          storeName: '',
+          ticketNumber: '',
+          description: '',
+          servicesDate: '',
           workDone: 'REPAIR AND MAINTENANCE',
-          totalInvoiceAmount: 0 
-        }, 
-        parts: [] 
+          totalInvoiceAmount: 0,
+        },
+        parts: [],
       },
     ])
   }
@@ -2605,7 +3037,7 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
         if (row.id === rowId) {
           const newPart = {
             id: `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 }
+            values: { partsDescription: '', partsQty: 0, price: 0, subtotal: 0 },
           }
           return { ...row, parts: [...row.parts, newPart] }
         }
@@ -2619,7 +3051,10 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
       prev.map((row) => {
         if (row.id === rowId) {
           const updatedParts = row.parts.filter((part) => part.id !== partId)
-          const totalInvoiceAmount = updatedParts.reduce((sum, part) => sum + (Number(part.values.subtotal) || 0), 0)
+          const totalInvoiceAmount = updatedParts.reduce(
+            (sum, part) => sum + (Number(part.values.subtotal) || 0),
+            0,
+          )
           return { ...row, parts: updatedParts, values: { ...row.values, totalInvoiceAmount } }
         }
         return row
@@ -2645,33 +3080,81 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
         parentRowId: row.id,
       }))
     })
-    
-    onSave?.(flattenedRows, [
-      { label: 'INVOICE' }, 
-      { label: 'STORE NUMBER' }, 
-      { label: 'STORE NAME' }, 
-      { label: 'TICKET NUMBER' }, 
-      { label: 'DESCRIPTION' }, 
-      { label: 'SERVICES DATE' }, 
-      { label: 'WORK DONE' }, 
-      { label: 'PARTS DESCRIPTION' }, 
-      { label: 'PARTS QTY.' }, 
-      { label: 'PRICE' }, 
-      { label: 'SUBTOTAL' }, 
-      { label: 'TOTAL INVOICE AMOUNT' }
-    ], { 
-      vatMode: false, 
-      quantityMode: false,
-      soa_sub_total: subTotal,
-      soa_vat: vat,
-      soa_total: total,
-    })
+
+    onSave?.(
+      flattenedRows,
+      [
+        { label: 'INVOICE' },
+        { label: 'STORE NUMBER' },
+        { label: 'STORE NAME' },
+        { label: 'TICKET NUMBER' },
+        { label: 'DESCRIPTION' },
+        { label: 'SERVICES DATE' },
+        { label: 'WORK DONE' },
+        { label: 'PARTS DESCRIPTION' },
+        { label: 'PARTS QTY.' },
+        { label: 'PRICE' },
+        { label: 'SUBTOTAL' },
+        { label: 'TOTAL INVOICE AMOUNT' },
+      ],
+      {
+        vatMode: false,
+        quantityMode: false,
+        soa_sub_total: subTotal,
+        soa_vat: vat,
+        soa_total: total,
+      },
+    )
   }
 
   // Calculate totals
   const subTotal = rows.reduce((sum, row) => sum + (Number(row.values.totalInvoiceAmount) || 0), 0)
   const vat = Number((subTotal * 0.12).toFixed(2))
   const total = Number((subTotal + vat).toFixed(2))
+
+  const itemizedColumns = [
+    { key: 'invoice', header: 'INVOICE' },
+    { key: 'storeNumber', header: 'STORE NUMBER' },
+    { key: 'storeName', header: 'STORE NAME' },
+    { key: 'ticketNumber', header: 'TICKET NUMBER' },
+    { key: 'description', header: 'DESCRIPTION' },
+    { key: 'servicesDate', header: 'SERVICES DATE' },
+    { key: 'workDone', header: 'WORK DONE' },
+    { key: 'partsDescription', header: 'PARTS DESCRIPTION' },
+    { key: 'partsQty', header: 'PARTS QTY.' },
+    { key: 'price', header: 'PRICE' },
+    { key: 'subtotal', header: 'SUBTOTAL' },
+    { key: 'totalInvoiceAmount', header: 'TOTAL INVOICE AMOUNT' },
+  ]
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      saveRows: handleSave,
+      getRows: () => rows,
+      getColumns: () => itemizedColumns,
+      exportPdf: () =>
+        exportStatementToPdf({
+          columns: itemizedColumns,
+          rows,
+          documentMeta,
+          statementId,
+          totals: { subTotal, vat, total },
+        }),
+      generatePdfPreview: async (showSubtotal, showVat, showTotal) =>
+        exportStatementToPdf({
+          columns: itemizedColumns,
+          rows,
+          documentMeta,
+          statementId,
+          totals: { subTotal, vat, total },
+          showSubtotal,
+          showVat,
+          showTotal,
+        }),
+    }),
+    [rows, documentMeta, statementId, subTotal, vat, total],
+  )
 
   React.useEffect(() => {
     onTotalsChange?.({ subTotal, vat, total })
@@ -2828,7 +3311,10 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                   <tr key={part.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                     {partIdx === 0 && (
                       <>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 border-r border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 border-r border-gray-200"
+                        >
                           <input
                             type="text"
                             value={row.values.invoice || ''}
@@ -2836,7 +3322,10 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                           />
                         </td>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 border-r border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 border-r border-gray-200"
+                        >
                           <input
                             type="text"
                             value={row.values.storeNumber || ''}
@@ -2844,7 +3333,10 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                           />
                         </td>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 border-r border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 border-r border-gray-200"
+                        >
                           <input
                             type="text"
                             value={row.values.storeName || ''}
@@ -2852,15 +3344,23 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                           />
                         </td>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 border-r border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 border-r border-gray-200"
+                        >
                           <input
                             type="text"
                             value={row.values.ticketNumber || ''}
-                            onChange={(e) => handleRowChange(row.id, 'ticketNumber', e.target.value)}
+                            onChange={(e) =>
+                              handleRowChange(row.id, 'ticketNumber', e.target.value)
+                            }
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                           />
                         </td>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 border-r border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 border-r border-gray-200"
+                        >
                           <input
                             type="text"
                             value={row.values.description || ''}
@@ -2868,15 +3368,23 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                           />
                         </td>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 border-r border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 border-r border-gray-200"
+                        >
                           <input
                             type="date"
                             value={row.values.servicesDate || ''}
-                            onChange={(e) => handleRowChange(row.id, 'servicesDate', e.target.value)}
+                            onChange={(e) =>
+                              handleRowChange(row.id, 'servicesDate', e.target.value)
+                            }
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                           />
                         </td>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 border-r border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 border-r border-gray-200"
+                        >
                           <input
                             type="text"
                             value={row.values.workDone || 'REPAIR AND MAINTENANCE'}
@@ -2891,7 +3399,9 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                         <input
                           type="text"
                           value={part.values.partsDescription || ''}
-                          onChange={(e) => handlePartChange(row.id, part.id, 'partsDescription', e.target.value)}
+                          onChange={(e) =>
+                            handlePartChange(row.id, part.id, 'partsDescription', e.target.value)
+                          }
                           className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                           placeholder="Loading parts..."
                           disabled
@@ -2912,26 +3422,31 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                             placeholder="Search or type part"
                           />
-                          {activePartsDropdown === `${row.id}-${part.id}` && filteredParts(part.values.partsDescription).length > 0 && (
-                            <div className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
-                              {filteredParts(part.values.partsDescription).map((partData) => (
-                                <button
-                                  key={partData.part_id}
-                                  type="button"
-                                  onMouseDown={(e) => {
-                                    e.preventDefault()
-                                    handlePartSelect(row.id, part.id, partData)
-                                    setActivePartsDropdown(null)
-                                  }}
-                                  className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                                >
-                                  <div className="font-semibold">{partData.name}</div>
-                                  <div className="text-[10px] text-gray-500">{partData.description}</div>
-                                  <div className="text-[10px] text-gray-400">Price: {partData.price}</div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                          {activePartsDropdown === `${row.id}-${part.id}` &&
+                            filteredParts(part.values.partsDescription).length > 0 && (
+                              <div className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                                {filteredParts(part.values.partsDescription).map((partData) => (
+                                  <button
+                                    key={partData.part_id}
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault()
+                                      handlePartSelect(row.id, part.id, partData)
+                                      setActivePartsDropdown(null)
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
+                                  >
+                                    <div className="font-semibold">{partData.name}</div>
+                                    <div className="text-[10px] text-gray-500">
+                                      {partData.description}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400">
+                                      Price: {partData.price}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                         </div>
                       )}
                     </td>
@@ -2939,7 +3454,9 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                       <input
                         type="number"
                         value={part.values.partsQty || 0}
-                        onChange={(e) => handlePartChange(row.id, part.id, 'partsQty', e.target.value)}
+                        onChange={(e) =>
+                          handlePartChange(row.id, part.id, 'partsQty', e.target.value)
+                        }
                         className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                         min="0"
                       />
@@ -2958,7 +3475,10 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
                     </td>
                     {partIdx === 0 && (
                       <>
-                        <td rowSpan={row.parts.length} className="px-4 py-2 font-mono border-l border-gray-200">
+                        <td
+                          rowSpan={row.parts.length}
+                          className="px-4 py-2 font-mono border-l border-gray-200"
+                        >
                           {formatCurrency(row.values.totalInvoiceAmount || 0)}
                         </td>
                         <td rowSpan={row.parts.length} className="px-4 py-2">
@@ -2999,7 +3519,7 @@ const ItemizedPartsTable = ({ statementId, documentMeta, onSave, initialRows, sa
       </table>
     </div>
   )
-}
+})
 
 export default function StatementDetails() {
   const match = useMatch('/statement/$id')
@@ -3033,60 +3553,77 @@ export default function StatementDetails() {
   const tableRef = useRef(null)
   const autoSaveTimerRef = useRef(null)
   const [liveMeta, setLiveMeta] = useState({ subTotal: 0, vat: 0, total: 0 })
+  const [excelNameModalOpen, setExcelNameModalOpen] = useState(false)
+  const [excelName, setExcelName] = useState('')
+  const [excelExportRequest, setExcelExportRequest] = useState(null)
+  const [excelExporting, setExcelExporting] = useState(false)
 
   // Auto-save functionality
-  const triggerAutoSave = useCallback((currentRows, currentColumns) => {
-    console.log('Auto-save triggered', { currentRows, currentColumns })
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current)
-    }
-
-    setAutoSaving(true)
-    autoSaveTimerRef.current = setTimeout(async () => {
-      try {
-        const rowsToSave = currentRows || tableRef.current?.getRows?.() || []
-        const columnsToSave = currentColumns || tableRef.current?.getColumns?.() || []
-
-        // Calculate totals from current rows to ensure we save the latest values
-        const subTotal = rowsToSave.reduce((sum, r) => {
-          if (r.parts && r.parts.length > 0) {
-            const partsSum = r.parts.reduce((partSum, part) => {
-              return partSum + (part.values?.subtotal || 0)
-            }, 0)
-            return sum + partsSum
-          }
-          return sum + getComputedSalesTotal(r.values, columnsToSave)
-        }, 0)
-        const vat = vatPerRow
-          ? rowsToSave.reduce((sum, r) => sum + getComputedVatValue(
-              r.parts && r.parts.length > 0
-                ? r.parts.reduce((partSum, part) => partSum + (part.values?.subtotal || 0), 0)
-                : getComputedSalesTotal(r.values, columnsToSave)
-            ), 0)
-          : Number((subTotal * 0.12).toFixed(2))
-        const total = Number((subTotal + vat).toFixed(2))
-
-        // Update liveMeta with the calculated totals
-        setLiveMeta({ subTotal, vat, total })
-
-        console.log('Auto-save executing', { rowsToSave, columnsToSave, subTotal, vat, total })
-        if (rowsToSave.length > 0 && columnsToSave.length > 0) {
-          await handleSaveRows(rowsToSave, columnsToSave, {
-            vatMode: vatPerRow,
-            quantityMode: quantityMode === 'add',
-            soa_sub_total: subTotal,
-            soa_vat: vat,
-            soa_total: total,
-          }, true) // isAutoSave = true for silent save
-          console.log('Auto-save completed successfully')
-        }
-      } catch (err) {
-        console.error('Auto-save failed:', err)
-      } finally {
-        setAutoSaving(false)
+  const triggerAutoSave = useCallback(
+    (currentRows, currentColumns) => {
+      console.log('Auto-save triggered', { currentRows, currentColumns })
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
       }
-    }, 1500) // Debounce for 1.5 seconds
-  }, [vatPerRow, quantityMode])
+
+      setAutoSaving(true)
+      autoSaveTimerRef.current = setTimeout(async () => {
+        try {
+          const rowsToSave = currentRows || tableRef.current?.getRows?.() || []
+          const columnsToSave = currentColumns || tableRef.current?.getColumns?.() || []
+
+          // Calculate totals from current rows to ensure we save the latest values
+          const subTotal = rowsToSave.reduce((sum, r) => {
+            if (r.parts && r.parts.length > 0) {
+              const partsSum = r.parts.reduce((partSum, part) => {
+                return partSum + (part.values?.subtotal || 0)
+              }, 0)
+              return sum + partsSum
+            }
+            return sum + getComputedSalesTotal(r.values, columnsToSave)
+          }, 0)
+          const vat = vatPerRow
+            ? rowsToSave.reduce(
+                (sum, r) =>
+                  sum +
+                  getComputedVatValue(
+                    r.parts && r.parts.length > 0
+                      ? r.parts.reduce((partSum, part) => partSum + (part.values?.subtotal || 0), 0)
+                      : getComputedSalesTotal(r.values, columnsToSave),
+                  ),
+                0,
+              )
+            : Number((subTotal * 0.12).toFixed(2))
+          const total = Number((subTotal + vat).toFixed(2))
+
+          // Update liveMeta with the calculated totals
+          setLiveMeta({ subTotal, vat, total })
+
+          console.log('Auto-save executing', { rowsToSave, columnsToSave, subTotal, vat, total })
+          if (rowsToSave.length > 0 && columnsToSave.length > 0) {
+            await handleSaveRows(
+              rowsToSave,
+              columnsToSave,
+              {
+                vatMode: vatPerRow,
+                quantityMode: quantityMode === 'add',
+                soa_sub_total: subTotal,
+                soa_vat: vat,
+                soa_total: total,
+              },
+              true,
+            ) // isAutoSave = true for silent save
+            console.log('Auto-save completed successfully')
+          }
+        } catch (err) {
+          console.error('Auto-save failed:', err)
+        } finally {
+          setAutoSaving(false)
+        }
+      }, 1500) // Debounce for 1.5 seconds
+    },
+    [vatPerRow, quantityMode],
+  )
 
   // Column color management
   const [columnColors, setColumnColors] = useState({})
@@ -3163,7 +3700,7 @@ export default function StatementDetails() {
       const response = await apiClient.get(`/statement/${statementId}`)
       const statementData = response.data?.data || null
       setStatement(statementData)
-      
+
       // load saved items for this statement (if any)
       try {
         const itemsResp = await apiClient.get(`/statement/${statementId}/items`)
@@ -3228,7 +3765,7 @@ export default function StatementDetails() {
 
     try {
       if (!isAutoSave) setSavingRows(true)
-      
+
       const fieldNames = columns
         .filter((column) => column.key !== 'vat')
         .map((column) => column.key || column.header)
@@ -3251,8 +3788,7 @@ export default function StatementDetails() {
           return formatHeaderLabel(baseHeader)
         })
       const useQuantity = Boolean(
-        options.quantityMode ||
-        columns.some((column) => isQuantityColumn(column)),
+        options.quantityMode || columns.some((column) => isQuantityColumn(column)),
       )
       const sanitizedRows = rows.map((row) => {
         const values = { ...(row.values || row || {}) }
@@ -3279,9 +3815,9 @@ export default function StatementDetails() {
         soa_sub_total: options.soa_sub_total,
         soa_vat: options.soa_vat,
         soa_total: options.soa_total,
-        headers: columns.map(col => ({
+        headers: columns.map((col) => ({
           key: col.key,
-          header: col.header
+          header: col.header,
         })),
         columnMeta: columns
           .filter((column) => column.key && (column.serviceMeta || column.quantityMeta))
@@ -3325,7 +3861,10 @@ export default function StatementDetails() {
       console.error('Save statement rows error:', err)
       console.error('Error response:', err?.response)
       console.error('Error data:', err?.response?.data)
-      const message = err?.response?.data?.message || err?.message || 'Unable to save statement rows at this time.'
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Unable to save statement rows at this time.'
       if (!isAutoSave) {
         showToast('error', message)
         setError(message)
@@ -3356,15 +3895,15 @@ export default function StatementDetails() {
 
   // Column color management functions
   const handleColorChange = (columnKey, color) => {
-    setColumnColors(prev => ({
+    setColumnColors((prev) => ({
       ...prev,
-      [columnKey]: color
+      [columnKey]: color,
     }))
     setShowColorPicker(null)
   }
 
   const handleRemoveColor = (columnKey) => {
-    setColumnColors(prev => {
+    setColumnColors((prev) => {
       const newColors = { ...prev }
       delete newColors[columnKey]
       return newColors
@@ -3374,7 +3913,7 @@ export default function StatementDetails() {
   // Parse existing headers to detect DR NO, RT NO, and Material Cost inclusion
   const parseExistingHeaderFlags = (rawHeaders = []) => {
     const normalizeHeaderKey = (header = '') => {
-      const headerText = typeof header === 'object' ? (header.header || header.key || header) : header
+      const headerText = typeof header === 'object' ? header.header || header.key || header : header
       return String(headerText ?? '')
         .trim()
         .toLowerCase()
@@ -3383,15 +3922,22 @@ export default function StatementDetails() {
 
     const hasDrNo = rawHeaders.some((header) => normalizeHeaderKey(header) === 'drno')
     const hasRtNo = rawHeaders.some((header) => normalizeHeaderKey(header) === 'rtno')
-    const hasMaterialCost = rawHeaders.some((header) => normalizeHeaderKey(header) === 'materialcost')
+    const hasMaterialCost = rawHeaders.some(
+      (header) => normalizeHeaderKey(header) === 'materialcost',
+    )
 
     return { hasDrNo, hasRtNo, hasMaterialCost }
   }
 
   // Rebuild headers by toggling DR NO, RT NO, and Material Cost
-  const rebuildHeadersWithToggle = (currentHeaders = [], newIncludeDrNo, newIncludeRtNo, newIncludeMaterialCost) => {
+  const rebuildHeadersWithToggle = (
+    currentHeaders = [],
+    newIncludeDrNo,
+    newIncludeRtNo,
+    newIncludeMaterialCost,
+  ) => {
     const normalizeHeaderKey = (header = '') => {
-      const headerText = typeof header === 'object' ? (header.header || header.key || header) : header
+      const headerText = typeof header === 'object' ? header.header || header.key || header : header
       return String(headerText ?? '')
         .trim()
         .toLowerCase()
@@ -3455,7 +4001,12 @@ export default function StatementDetails() {
         }
       }
 
-      const newHeaders = rebuildHeadersWithToggle(rawHeaders, checked, includeRtNo, includeMaterialCost)
+      const newHeaders = rebuildHeadersWithToggle(
+        rawHeaders,
+        checked,
+        includeRtNo,
+        includeMaterialCost,
+      )
       setStatement((prev) => ({
         ...prev,
         soa_headers: newHeaders,
@@ -3464,7 +4015,7 @@ export default function StatementDetails() {
       // Save to server
       try {
         await apiClient.put(`/statement/${statementId}`, {
-          headers: newHeaders
+          headers: newHeaders,
         })
         // Reload statement details to reflect header changes
         loadStatementDetails()
@@ -3494,7 +4045,12 @@ export default function StatementDetails() {
         }
       }
 
-      const newHeaders = rebuildHeadersWithToggle(rawHeaders, includeDrNo, checked, includeMaterialCost)
+      const newHeaders = rebuildHeadersWithToggle(
+        rawHeaders,
+        includeDrNo,
+        checked,
+        includeMaterialCost,
+      )
       setStatement((prev) => ({
         ...prev,
         soa_headers: newHeaders,
@@ -3503,7 +4059,7 @@ export default function StatementDetails() {
       // Save to server
       try {
         await apiClient.put(`/statement/${statementId}`, {
-          headers: newHeaders
+          headers: newHeaders,
         })
         // Reload statement details to reflect header changes
         loadStatementDetails()
@@ -3542,7 +4098,7 @@ export default function StatementDetails() {
       // Save to server
       try {
         await apiClient.put(`/statement/${statementId}`, {
-          headers: newHeaders
+          headers: newHeaders,
         })
         // Reload statement details to reflect header changes
         loadStatementDetails()
@@ -3558,12 +4114,16 @@ export default function StatementDetails() {
 
     let rawHeaders = []
     if (Array.isArray(statement.soa_headers)) {
-      rawHeaders = statement.soa_headers.map(h => typeof h === 'object' ? (h.header || h.key || h) : h)
+      rawHeaders = statement.soa_headers.map((h) =>
+        typeof h === 'object' ? h.header || h.key || h : h,
+      )
     } else if (typeof statement.soa_headers === 'string') {
       const trimmed = statement.soa_headers.trim()
       try {
         const parsed = JSON.parse(trimmed)
-        rawHeaders = Array.isArray(parsed) ? parsed.map(h => typeof h === 'object' ? (h.header || h.key || h) : h) : [typeof parsed === 'object' ? (parsed.header || parsed.key || parsed) : parsed]
+        rawHeaders = Array.isArray(parsed)
+          ? parsed.map((h) => (typeof h === 'object' ? h.header || h.key || h : h))
+          : [typeof parsed === 'object' ? parsed.header || parsed.key || parsed : parsed]
       } catch {
         rawHeaders = trimmed
           .split(',')
@@ -3598,7 +4158,13 @@ export default function StatementDetails() {
     // like "Qty (Renovation)" or a bare "Qty"/"Quantity".
     rawHeaders
       .filter((headerText) => {
-        const normalizedHeader = String(typeof headerText === 'object' ? (headerText.header || headerText.key || headerText) : headerText).trim().toLowerCase()
+        const normalizedHeader = String(
+          typeof headerText === 'object'
+            ? headerText.header || headerText.key || headerText
+            : headerText,
+        )
+          .trim()
+          .toLowerCase()
         return (
           normalizedHeader !== '%vat' &&
           normalizedHeader !== 'vat' &&
@@ -3608,7 +4174,10 @@ export default function StatementDetails() {
         )
       })
       .forEach((headerText, index) => {
-        const normalizedHeaderText = typeof headerText === 'object' ? (headerText.header || headerText.key || headerText) : headerText
+        const normalizedHeaderText =
+          typeof headerText === 'object'
+            ? headerText.header || headerText.key || headerText
+            : headerText
         const normalizedServiceHeader = normalizeServiceId(normalizedHeaderText)
         const serviceMatch = services.find((service) => {
           const serviceId = normalizeServiceId(service.id)
@@ -3618,7 +4187,12 @@ export default function StatementDetails() {
 
         // Use the actual header text as the key, not the normalized service header
         // This ensures the key matches what the user sees in the header
-        const headerTextForKey = String(serviceMatch?.name || (typeof headerText === 'object' ? headerText.header || headerText.key || headerText : headerText))
+        const headerTextForKey = String(
+          serviceMatch?.name ||
+            (typeof headerText === 'object'
+              ? headerText.header || headerText.key || headerText
+              : headerText),
+        )
         const baseKey = getUniqueColumnKey(headerTextForKey, index)
         const serviceKey = serviceMatch
           ? normalizeHeaderKey(serviceMatch.name || serviceMatch.id)
@@ -3626,13 +4200,22 @@ export default function StatementDetails() {
 
         columns.push({
           key: baseKey,
-          header: String(serviceMatch?.name || (typeof headerText === 'object' ? headerText.header || headerText.key || headerText : headerText)),
+          header: String(
+            serviceMatch?.name ||
+              (typeof headerText === 'object'
+                ? headerText.header || headerText.key || headerText
+                : headerText),
+          ),
           align: 'left',
           render: () => <span className="text-gray-400 font-mono">—</span>,
           serviceMeta: serviceMatch
             ? {
                 serviceId: normalizeServiceId(serviceMatch.id),
-                serviceName: serviceMatch.name || (typeof headerText === 'object' ? headerText.header || headerText.key || headerText : headerText),
+                serviceName:
+                  serviceMatch.name ||
+                  (typeof headerText === 'object'
+                    ? headerText.header || headerText.key || headerText
+                    : headerText),
                 servicePrice: Number(serviceMatch.price || 0),
                 serviceKey,
               }
@@ -3756,6 +4339,26 @@ export default function StatementDetails() {
     [statement, companyMap],
   )
 
+  const requestExcelExport = (request) => {
+    setExcelExportRequest(request)
+    setExcelName(`statement-${statementId || 'export'}`)
+    setExcelNameModalOpen(true)
+  }
+
+  const confirmExcelExport = async () => {
+    if (!excelExportRequest) return
+    try {
+      setExcelExporting(true)
+      await exportStatementToExcel({ ...excelExportRequest, filename: excelName })
+      setExcelNameModalOpen(false)
+      setExcelExportRequest(null)
+    } catch (err) {
+      console.error('Excel export failed:', err)
+    } finally {
+      setExcelExporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <Layout
@@ -3846,7 +4449,11 @@ export default function StatementDetails() {
                 type="button"
                 onClick={async () => {
                   try {
-                    const blob = await tableRef.current?.generatePdfPreview(showSubtotal, showVat, showTotal)
+                    const blob = await tableRef.current?.generatePdfPreview(
+                      showSubtotal,
+                      showVat,
+                      showTotal,
+                    )
                     setPdfBlob(blob)
                     setPdfPreviewOpen(true)
                   } catch (err) {
@@ -3944,6 +4551,7 @@ export default function StatementDetails() {
                 initialRows={initialRows}
                 saving={savingRows}
                 onTotalsChange={setLiveMeta}
+                ref={tableRef}
               />
             )}
             {documentMeta.maintenanceFormat === 'ITEMIZED_PARTS' && (
@@ -3954,6 +4562,7 @@ export default function StatementDetails() {
                 initialRows={initialRows}
                 saving={savingRows}
                 onTotalsChange={setLiveMeta}
+                ref={tableRef}
               />
             )}
             {documentMeta.maintenanceFormat === 'OFFICIAL_INVOICE' && (
@@ -3964,7 +4573,8 @@ export default function StatementDetails() {
                 <div className="text-sm text-gray-600">
                   <p>Official invoice format will be rendered here.</p>
                   <p className="mt-2 text-xs text-gray-500">
-                    Format: NO | INVOICE | SERVICE DATE | AREA | SERVICE TYPE | WORK DONE | NO OF STORE | AMOUNT PER STORE | TOTAL VAT-EX | TOTAL VAT-IN
+                    Format: NO | INVOICE | SERVICE DATE | AREA | SERVICE TYPE | WORK DONE | NO OF
+                    STORE | AMOUNT PER STORE | TOTAL VAT-EX | TOTAL VAT-IN
                   </p>
                 </div>
               </div>
@@ -3993,6 +4603,7 @@ export default function StatementDetails() {
             includeMaterialCost={includeMaterialCost}
             onToggleMaterialCost={handleToggleMaterialCost}
             onAutoSave={triggerAutoSave}
+            onExportExcel={requestExcelExport}
             ref={tableRef}
           />
         ) : (
@@ -4030,6 +4641,42 @@ export default function StatementDetails() {
         </div>
       </div>
 
+      {excelNameModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-gray-900">Export Excel</h2>
+            <p className="mt-1 text-sm text-gray-500">Choose a filename or use the default name.</p>
+            <input
+              autoFocus
+              value={excelName}
+              onChange={(event) => setExcelName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') confirmExcelExport()
+              }}
+              className="mt-4 w-full rounded border border-gray-300 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              placeholder={`statement-${statementId || 'export'}`}
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setExcelNameModalOpen(false)}
+                className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmExcelExport}
+                disabled={excelExporting}
+                className="rounded bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {excelExporting ? 'Exporting...' : 'Use This Name'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PDF Preview Modal */}
       {pdfPreviewOpen && pdfBlob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -4041,7 +4688,12 @@ export default function StatementDetails() {
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -4065,7 +4717,11 @@ export default function StatementDetails() {
                       onChange={async (e) => {
                         setShowSubtotal(e.target.checked)
                         try {
-                          const blob = await tableRef.current?.generatePdfPreview(e.target.checked, showVat, showTotal)
+                          const blob = await tableRef.current?.generatePdfPreview(
+                            e.target.checked,
+                            showVat,
+                            showTotal,
+                          )
                           setPdfBlob(blob)
                         } catch (err) {
                           console.error('Failed to regenerate PDF:', err)
@@ -4082,7 +4738,11 @@ export default function StatementDetails() {
                       onChange={async (e) => {
                         setShowVat(e.target.checked)
                         try {
-                          const blob = await tableRef.current?.generatePdfPreview(showSubtotal, e.target.checked, showTotal)
+                          const blob = await tableRef.current?.generatePdfPreview(
+                            showSubtotal,
+                            e.target.checked,
+                            showTotal,
+                          )
                           setPdfBlob(blob)
                         } catch (err) {
                           console.error('Failed to regenerate PDF:', err)
@@ -4099,7 +4759,11 @@ export default function StatementDetails() {
                       onChange={async (e) => {
                         setShowTotal(e.target.checked)
                         try {
-                          const blob = await tableRef.current?.generatePdfPreview(showSubtotal, showVat, e.target.checked)
+                          const blob = await tableRef.current?.generatePdfPreview(
+                            showSubtotal,
+                            showVat,
+                            e.target.checked,
+                          )
                           setPdfBlob(blob)
                         } catch (err) {
                           console.error('Failed to regenerate PDF:', err)
