@@ -84,8 +84,6 @@ export const exportStatementToExcel = async ({
   const tableColumnCount = Math.max(columns.length, 4)
   const colCount = tableColumnCount + tableColumnOffset
   const lastColumnLetter = worksheet.getColumn(colCount).letter
-  let titleRow = 11
-  let tableHeaderRow = 14
   const expandedRows = expandRowsForExport(rows, columns)
 
   // Configure column default widths
@@ -112,7 +110,7 @@ export const exportStatementToExcel = async ({
   // Embed Logo Image
   try {
     const imageId = workbook.addImage({ base64: await toDataUrl(logo), extension: 'png' })
-    worksheet.addImage(imageId, { tl: { col: 1.05, row: 0.8 }, ext: { width: 110, height: 75 } })
+    worksheet.addImage(imageId, { tl: { col: 1.05, row: 0.5 }, ext: { width: 110, height: 75 } })
   } catch (error) {
     // Keep export usable if logo fails
   }
@@ -121,84 +119,104 @@ export const exportStatementToExcel = async ({
   const from = documentMeta.fromCompany || {}
   const to = documentMeta.toCompany || {}
 
-  const storeNameColumnIndex = columns.findIndex((column) =>
-    /store\s*name/i.test(String(column.header || '')),
-  )
-  const headerStartColumn =
-    (storeNameColumnIndex >= 0 ? storeNameColumnIndex + 1 : 4) + tableColumnOffset
-  const headerEndColumn = Math.max(headerStartColumn, colCount - 3)
-  const writeHeaderLine = (rowNumber, value, { size = 10, bold = true } = {}) => {
-    const start = worksheet.getColumn(headerStartColumn).letter
-    const end = worksheet.getColumn(headerEndColumn).letter
-    worksheet.mergeCells(`${start}${rowNumber}:${end}${rowNumber}`)
-    const cell = worksheet.getCell(`${start}${rowNumber}`)
-    cell.value = value
-    cell.font = { name: 'Calibri', size, bold }
-    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+  let currentRow = 1
+
+  // Helper to safely write unmerged single text rows for address details
+  const writeHeaderRow = (rowNum, text, { size = 10, bold = false } = {}) => {
+    const cell = worksheet.getCell(`D${rowNum}`)
+    cell.value = text
+    cell.font = { name: 'Calibri', size, bold, color: { argb: 'FF000000' } }
+    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: false }
+    worksheet.getRow(rowNum).height = 18
   }
 
-  const writeCompanyBlock = (
-    label,
-    company,
-    startRow,
-    fallbackName,
-    fallbackAddress,
-    fallbackContact,
-  ) => {
-    writeHeaderLine(startRow, `${label}: ${company.name || fallbackName}`, { size: 11 })
-    const addressLines = String(company.address || fallbackAddress)
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    addressLines.forEach((line, index) => writeHeaderLine(startRow + 1 + index, line))
-    const contact = buildContactLine(company) || fallbackContact
-    if (contact) writeHeaderLine(startRow + 1 + addressLines.length, contact)
-    return startRow + addressLines.length + (contact ? 1 : 0)
+  // --- FROM BLOCK ---
+  writeHeaderRow(
+    currentRow,
+    `From: ${from.name || '5L SOLUTIONS SUPPLY AND ALLIED SERVICES CORP.'}`,
+    { size: 11, bold: true },
+  )
+  currentRow++
+
+  const fromAddressLines = (
+    from.address ||
+    'Block 57 Lot 1 Phase 3B Macaria Ave., Pacita 1\nBrgy San Francisco, Biñan City, Laguna'
+  )
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  fromAddressLines.forEach((line) => {
+    writeHeaderRow(currentRow, line, { size: 10, bold: true })
+    currentRow++
+  })
+
+  const fromContact = buildContactLine(from) || 'Tel. (02) 8709 9896'
+  if (fromContact) {
+    writeHeaderRow(currentRow, fromContact, { size: 10, bold: true })
+    currentRow++
   }
 
-  writeCompanyBlock(
-    'From',
-    from,
-    1,
-    '5L SOLUTIONS SUPPLY AND ALLIED SERVICES CORP.',
-    'Block 57 Lot 1 Phase 3B Macaria Ave.\nPacita Complex San Francisco\nBiñan Laguna',
-    'Tel. (02) 8709 9896',
-  )
-  const toEndRow = writeCompanyBlock(
-    'To',
-    to,
-    7,
-    'Philippine Seven Corporation',
-    '7th Flr. The Columbia Tower Bldg. Ortigas Ave.,\nWack-Wack Greenhills, City of Mandaluyong\nNCR Second District 1550 Phils.',
-    '',
-  )
+  currentRow++ // Gap line
 
-  // Date Field sits below the To block to avoid colliding with its details.
-  const dateColLetter = worksheet.getColumn(Math.max(colCount - 2, 1)).letter
-  const dateRow = toEndRow + 1
-  worksheet.getCell(`${dateColLetter}${dateRow}`).value = 'Date:'
-  worksheet.getCell(`${dateColLetter}${dateRow}`).font = { name: 'Calibri', size: 12, bold: true }
-  worksheet.getCell(`${dateColLetter}${dateRow}`).alignment = { horizontal: 'right' }
+  // --- TO BLOCK ---
+  writeHeaderRow(currentRow, `To: ${to.name || 'PHILIPPINE SEVEN CORPORATION'}`, {
+    size: 11,
+    bold: true,
+  })
+  currentRow++
 
-  const formattedDate = formatDateLabel(documentMeta.date) || documentMeta.date || 'AUG'
+  const toAddressLines = (
+    to.address ||
+    '7TH FLR. THE COLUMBIA TOWER BLDG. ORTIGAS AVE. WACK-WACK GREENHILLS\nCITY OF MANDALUYONG NCR SECOND DISTRICT 1550 PHILS.'
+  )
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  toAddressLines.forEach((line) => {
+    writeHeaderRow(currentRow, line, { size: 10, bold: true })
+    currentRow++
+  })
+
+  // Date Field placed aligned to the right on the last line of the "To" block
+  const dateRow = currentRow - 1
+  const dateLabelColLetter = worksheet.getColumn(Math.max(colCount - 2, 1)).letter
+
+  worksheet.getCell(`${dateLabelColLetter}${dateRow}`).value = 'Date:'
+  worksheet.getCell(`${dateLabelColLetter}${dateRow}`).font = {
+    name: 'Calibri',
+    size: 12,
+    bold: true,
+  }
+  worksheet.getCell(`${dateLabelColLetter}${dateRow}`).alignment = {
+    horizontal: 'right',
+    vertical: 'middle',
+  }
+
+  const formattedDate =
+    formatDateLabel(documentMeta.date) || documentMeta.date || 'September 7, 2026'
   worksheet.getCell(`${lastColumnLetter}${dateRow}`).value = formattedDate
   worksheet.getCell(`${lastColumnLetter}${dateRow}`).font = {
     name: 'Calibri',
     size: 12,
     bold: true,
   }
-  worksheet.getCell(`${lastColumnLetter}${dateRow}`).alignment = { horizontal: 'center' }
+  worksheet.getCell(`${lastColumnLetter}${dateRow}`).alignment = {
+    horizontal: 'center',
+    vertical: 'middle',
+  }
 
-  titleRow = Math.max(titleRow, dateRow + 2)
-  tableHeaderRow = titleRow + 3
+  currentRow += 1 // Gap before statement title
 
   // Statement Title Header Section
+  const titleRow = currentRow
+  const tableHeaderRow = titleRow + 3
+
   const firstTableColumnLetter = worksheet.getColumn(1 + tableColumnOffset).letter
   worksheet.mergeCells(`${firstTableColumnLetter}${titleRow}:${lastColumnLetter}${titleRow}`)
   const titleCell = worksheet.getCell(`${firstTableColumnLetter}${titleRow}`)
-  titleCell.value =
-    documentMeta.title ||
-    'Statement of Account For IHW Rectification, Antenna Installation, Telco Migration, Kiosk, and Cable Pulling'
+  titleCell.value = (documentMeta.title || 'STATEMENT OF ACCOUNT FOR PUNCHLISTING').toUpperCase()
   titleCell.font = { name: 'Calibri', size: 11, bold: true }
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
   titleCell.border = tableBorder
@@ -221,22 +239,25 @@ export const exportStatementToExcel = async ({
 
       const isNumber = typeof value === 'number'
       const isRowNo = isRowNumberColumn(column)
+      const isStoreNo = /store\s*(no|number)/i.test(String(column.header || ''))
 
       styleCell(cell, {
-        number: isNumber,
+        number: isNumber && !isStoreNo,
         align: 'center',
         fontSize: 10,
       })
 
       if (isRowNo) {
         cell.numFmt = '0'
+      } else if (isStoreNo) {
+        cell.numFmt = '#,##0.00'
       }
     })
   })
 
   // Totals & Calculations Setup
   const firstDataRow = tableHeaderRow + 1
-  const lastDataRow = Math.max(firstDataRow, tableHeaderRow + expandedRows.length)
+  const lastDataRow = Math.max(firstDataRow, tableHeaderRow + expandedRows.length - 1)
   const partsKeys = hasPartsColumns(columns) ? getPartsColumnKeys(columns) : null
   const totalColumnIndex = columns.findIndex((column) =>
     /total sales|total amount|total invoice amount/i.test(String(column.header || '')),
@@ -291,6 +312,9 @@ export const exportStatementToExcel = async ({
   worksheet.getRow(tableHeaderRow).height = 36
 
   // Signature Section
+  const storeNameColumnIndex = columns.findIndex((column) =>
+    /store\s*name/i.test(String(column.header || '')),
+  )
   const signatureRow = totalRow + 3
   const preparedStartIndex =
     (storeNameColumnIndex >= 0 ? storeNameColumnIndex + 1 : 4) + tableColumnOffset
@@ -311,15 +335,13 @@ export const exportStatementToExcel = async ({
   })
 
   const signatureLineRow = signatureRow + 2
-  // Prepared By underline
   worksheet.mergeCells(`${preparedStart}${signatureLineRow}:${preparedEnd}${signatureLineRow}`)
   const prepLine = worksheet.getCell(`${preparedStart}${signatureLineRow}`)
   prepLine.border = { bottom: { style: 'medium', color: { argb: 'FF000000' } } }
 
-  // Received By underline
   worksheet.mergeCells(`${receivedStart}${signatureLineRow}:${receivedEnd}${signatureLineRow}`)
-  const recLine = worksheet.getCell(`${receivedStart}${signatureLineRow}`)
-  recLine.border = { bottom: { style: 'medium', color: { argb: 'FF000000' } } }
+  worksheet.recLine = worksheet.getCell(`${receivedStart}${signatureLineRow}`)
+  worksheet.recLine.border = { bottom: { style: 'medium', color: { argb: 'FF000000' } } }
 
   // Export File Processing
   const safeName =
