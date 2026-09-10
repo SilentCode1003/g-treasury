@@ -24,6 +24,8 @@
     "---- CRYPTOGRAPHY ----": "-------------------------",
     "encrypt": "node src/utilities/cryptography.util.js encrypt",
     "decrypt": "node src/utilities/cryptography.util.js decrypt",
+    "---- API TOKENS ----": "-------------------------",
+    "token:generate": "node src/utilities/generate-api-token.util.js",
     "---- FEATURE GENERATION ----": "-------------------------",
     "make:feature": "node src/utilities/generate-feature.util.js",
     "db:generate:models": "node src/database/utilities/generate-models.util.js"

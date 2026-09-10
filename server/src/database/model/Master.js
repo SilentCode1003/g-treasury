@@ -634,11 +634,12 @@ const Master = {
     tablename: 'master_parts',
     prefix: 'mp',
     prefix_: 'mp_',
-    insertColumns: ['name', 'description', 'price', 'status'],
-    selectColumns: ['mp_id', 'mp_name', 'mp_description', 'mp_price', 'mp_status'],
+    insertColumns: ['name', 'unit', 'description', 'price', 'status'],
+    selectColumns: ['mp_id', 'mp_name', 'mp_unit', 'mp_description', 'mp_price', 'mp_status'],
     selectOptionColumns: {
       id: 'mp_id',
       name: 'mp_name',
+      unit: 'mp_unit',
       description: 'mp_description',
       price: 'mp_price',
       status: 'mp_status',
@@ -646,6 +647,7 @@ const Master = {
     updateOptionColumns: {
       id: 'id',
       name: 'name',
+      unit: 'unit',
       description: 'description',
       price: 'price',
       status: 'status',
@@ -655,6 +657,7 @@ const Master = {
     columnDataTypes: {
       id: 'INTEGER',
       name: 'STRING',
+      unit: 'STRING',
       description: 'TEXT',
       price: 'DECIMAL',
       status: 'ENUM',

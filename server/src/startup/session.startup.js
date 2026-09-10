@@ -12,6 +12,7 @@ const options = {
     httpOnly: true,
     sameSite: 'lax',
     secure: false,
+    maxAge: Number(process.env.SESSION_MAX_AGE_MS) || 24 * 60 * 60 * 1000,
   },
 }
 

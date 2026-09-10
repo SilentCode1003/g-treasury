@@ -12,6 +12,10 @@ module.exports = {
         type: Sequelize.STRING(255),
         allowNull: false,
       },
+      mp_unit: {
+        type: Sequelize.STRING(300),
+        allowNull: true,
+      },
       mp_description: {
         type: Sequelize.TEXT,
         allowNull: true,

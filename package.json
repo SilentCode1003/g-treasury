@@ -27,10 +27,14 @@
     "swagger": "dotenv -e .env -- npm run swagger -w server",
     "encrypt": "dotenv -e .env -- npm run encrypt -w server",
     "decrypt": "dotenv -e .env -- npm run decrypt -w server",
+    "token:generate": "dotenv -e .env -- npm run token:generate -w server",
     "make:feature": "dotenv -e .env -- npm run make:feature -w server"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "dotenv-cli": "^7.3.0"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
   }
 }

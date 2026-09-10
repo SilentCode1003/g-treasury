@@ -7,27 +7,25 @@ const sql = new SQLQueryBuilder()
 const getParts = async (req, res, next) => {
   try {
     const { search } = req.query
-    
+
     let queryBuilder = sql
       .select([
         { col: Master.master_parts.selectOptionColumns.id, as: 'part_id' },
         { col: Master.master_parts.selectOptionColumns.name, as: 'name' },
+        { col: Master.master_parts.selectOptionColumns.unit, as: 'unit' },
         { col: Master.master_parts.selectOptionColumns.description, as: 'description' },
         { col: Master.master_parts.selectOptionColumns.price, as: 'price' },
         { col: Master.master_parts.selectOptionColumns.status, as: 'status' },
       ])
       .from(Master.master_parts.tablename)
-    
+
     if (search && search.trim() !== '') {
-      queryBuilder = queryBuilder.whereLike(
-        Master.master_parts.selectOptionColumns.name,
-        `%${search}%`
-      ).orWhereLike(
-        Master.master_parts.selectOptionColumns.description,
-        `%${search}%`
-      )
+      queryBuilder = queryBuilder
+        .whereLike(Master.master_parts.selectOptionColumns.name, `%${search}%`)
+        .orWhereLike(Master.master_parts.selectOptionColumns.unit, `%${search}%`)
+        .orWhereLike(Master.master_parts.selectOptionColumns.description, `%${search}%`)
     }
-    
+
     const { sql: query, bindings } = queryBuilder.build()
 
     const parts = await Query(query, bindings)
@@ -51,7 +49,7 @@ const getParts = async (req, res, next) => {
 
 const createPart = async (req, res, next) => {
   try {
-    const { name, description, price, status } = req.body
+    const { name, unit, description, price, status } = req.body
 
     if (!name || !status) {
       return res.status(400).json({
@@ -65,6 +63,7 @@ const createPart = async (req, res, next) => {
         Master.master_parts.tablename,
         {
           name,
+          mp_unit: typeof unit === 'string' && unit.trim() === '' ? null : unit,
           description: description || null,
           price: price || null,
           status,
@@ -79,6 +78,7 @@ const createPart = async (req, res, next) => {
       .select([
         { col: Master.master_parts.selectOptionColumns.id, as: 'part_id' },
         { col: Master.master_parts.selectOptionColumns.name, as: 'name' },
+        { col: Master.master_parts.selectOptionColumns.unit, as: 'unit' },
         { col: Master.master_parts.selectOptionColumns.description, as: 'description' },
         { col: Master.master_parts.selectOptionColumns.price, as: 'price' },
         { col: Master.master_parts.selectOptionColumns.status, as: 'status' },
@@ -95,6 +95,7 @@ const createPart = async (req, res, next) => {
       data: createdPart || {
         part_id: result.insertId,
         name,
+        unit: typeof unit === 'string' && unit.trim() === '' ? null : unit,
         description: description || null,
         price: price || null,
         status,
@@ -114,7 +115,7 @@ const createPart = async (req, res, next) => {
 const updatePart = async (req, res, next) => {
   try {
     const partId = Number(req.params.id)
-    const { name, description, price, status } = req.body
+    const { name, unit, description, price, status } = req.body
 
     if (!partId) {
       return res.status(400).json({
@@ -125,6 +126,9 @@ const updatePart = async (req, res, next) => {
 
     const updateData = {}
     if (name !== undefined) updateData.name = name
+    if (unit !== undefined) {
+      updateData.mp_unit = typeof unit === 'string' && unit.trim() === '' ? null : unit
+    }
     if (description !== undefined) updateData.description = description
     if (price !== undefined) updateData.price = price
     if (status !== undefined) updateData.status = status
@@ -156,6 +160,7 @@ const updatePart = async (req, res, next) => {
       .select([
         { col: Master.master_parts.selectOptionColumns.id, as: 'part_id' },
         { col: Master.master_parts.selectOptionColumns.name, as: 'name' },
+        { col: Master.master_parts.selectOptionColumns.unit, as: 'unit' },
         { col: Master.master_parts.selectOptionColumns.description, as: 'description' },
         { col: Master.master_parts.selectOptionColumns.price, as: 'price' },
         { col: Master.master_parts.selectOptionColumns.status, as: 'status' },

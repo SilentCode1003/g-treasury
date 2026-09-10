@@ -72,6 +72,7 @@
  * @typedef {Object} PartsCols
  * @property {'mp_id'} id
  * @property {'mp_name'} name
+ * @property {'mp_unit'} unit
  * @property {'mp_description'} description
  * @property {'mp_price'} price
  * @property {'mp_status'} status
@@ -194,12 +195,13 @@ const Master = {
     cols: {
       id: 'mp_id',
       name: 'mp_name',
+      unit: 'mp_unit',
       description: 'mp_description',
       price: 'mp_price',
       status: 'mp_status',
     },
-    select: ['mp_id', 'mp_name', 'mp_description', 'mp_price', 'mp_status'],
-    insert: ['mp_name', 'mp_description', 'mp_price', 'mp_status'],
+    select: ['mp_id', 'mp_name', 'mp_unit', 'mp_description', 'mp_price', 'mp_status'],
+    insert: ['mp_name', 'mp_unit', 'mp_description', 'mp_price', 'mp_status'],
   },
 };
 

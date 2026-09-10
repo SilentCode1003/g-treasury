@@ -15,6 +15,7 @@ console.log('Encrypted', EncryptString('admin'))
 const initRoutes = (app) => {
   app.use('/', credentialsRouter)
   app.use('/health', healthRouter)
+  app.use(auth)
   app.use('/access', accessRouter)
   app.use('/company', companyRouter)
   app.use('/department', departmentRouter)
@@ -24,7 +25,6 @@ const initRoutes = (app) => {
   app.use('/route-access', routeAccessRouter)
   app.use('/statement', statementRouter)
   app.use('/parts', partsRouter)
-  //app.use(auth)
 }
 
 module.exports = { initRoutes }
