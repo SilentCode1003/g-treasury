@@ -3,6 +3,19 @@ const swaggerUi = require('swagger-ui-express')
 const swaggerAutogen = require('swagger-autogen')()
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
+
+const getLocalIP = () => {
+  const interfaces = os.networkInterfaces()
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address
+      }
+    }
+  }
+  return 'localhost'
+}
 
 const initDocs = async (app) => {
   const outputFilePath = path.join(__dirname, '../../src/docs/swagger-output.json')
@@ -75,9 +88,22 @@ const initDocs = async (app) => {
 
   const doc = {
     info: { title: title, description: 'Auto-generated docs' },
-    host: `${process.env._HTTP_HOST || 'localhost'}:${process.env.VITE_SERVER_API_PORT || 3000}`,
+    host: `${getLocalIP()}:${process.env.VITE_SERVER_API_PORT || 3000}`,
     schemes: ['http'],
     definitions: definitions,
+    securityDefinitions: {
+      BearerAuth: {
+        type: 'apiKey',
+        name: 'Authorization',
+        in: 'header',
+        description: 'JWT Bearer Token for authentication. Format: "Bearer <token>"',
+      },
+    },
+    security: [
+      {
+        BearerAuth: [],
+      },
+    ],
   }
 
   try {
