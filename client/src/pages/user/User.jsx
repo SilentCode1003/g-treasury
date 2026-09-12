@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import DynamicTable from '../components/DynamicTable'
 import Modal from '../components/Modal'
 import DynamicToast from '../components/DynamicToast'
+import LoadingScreen from '../LoadingScreen'
 import { apiClient } from '../../api/axios'
 
 const formatStatus = (value) => {
@@ -269,6 +270,10 @@ export default function User() {
       onNavigate={handleNavigate}
       notificationCount={3}
     >
+      {loading ? (
+        <LoadingScreen label="Loading Users" subLabel="Fetching user data..." />
+      ) : (
+        <>
       <div className="mx-auto flex flex-col h-auto overflow-visible lg:h-[calc(100vh-110px)] space-y-4 lg:overflow-hidden">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between lg:shrink-0">
           <div>
@@ -487,6 +492,8 @@ export default function User() {
           </div>
         </form>
       </Modal>
+      </>
+      )}
     </Layout>
   )
 }

@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import DynamicTable from '../components/DynamicTable'
 import Modal from '../components/Modal'
 import DynamicToast from '../components/DynamicToast'
+import LoadingScreen from '../LoadingScreen'
 import { apiClient } from '../../api/axios'
 
 const formatStatus = (value) => {
@@ -210,6 +211,10 @@ export default function Department() {
       onNavigate={handleNavigate}
       notificationCount={3}
     >
+      {loading ? (
+        <LoadingScreen label="Loading Departments" subLabel="Fetching department data..." />
+      ) : (
+        <>
       {/* Container adapts to display height on desktop and natural scroll on mobile */}
       <div className="mx-auto flex flex-col h-auto overflow-visible lg:h-[calc(100vh-110px)] space-y-4 lg:overflow-hidden">
         {/* Top Control Block: Breadcrumbs & Add Button Action */}
@@ -423,6 +428,8 @@ export default function Department() {
           </div>
         </form>
       </Modal>
+      </>
+      )}
     </Layout>
   )
 }

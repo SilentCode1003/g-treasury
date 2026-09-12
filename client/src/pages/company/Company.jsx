@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import DynamicTable from '../components/DynamicTable'
 import Modal from '../components/Modal'
 import DynamicToast from '../components/DynamicToast'
+import LoadingScreen from '../LoadingScreen'
 import { apiClient } from '../../api/axios'
 
 const formatStatus = (value) => {
@@ -345,6 +346,10 @@ export default function Company() {
       onNavigate={handleNavigate}
       notificationCount={3}
     >
+      {loading ? (
+        <LoadingScreen label="Loading Companies" subLabel="Fetching company data..." />
+      ) : (
+        <>
       {/* Changes:
         - Mobile: 'h-auto overflow-visible' lets everything grow naturally to scroll the page.
         - Desktop (lg): 'lg:h-[calc(100vh-110px)] lg:overflow-hidden' freezes layout within the screen frame.
@@ -739,6 +744,8 @@ export default function Company() {
           </div>
         </form>
       </Modal>
+      </>
+      )}
     </Layout>
   )
 }

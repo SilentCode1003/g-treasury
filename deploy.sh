@@ -5,11 +5,8 @@ echo "------------------------------------------"
 echo "🛠️  Refreshing Services: G-Treasury System"
 echo "------------------------------------------"
 
-echo "🧹 Clearing lockfile to prevent Linux binary errors..."
-rm -f package-lock.json
-
-echo "📦 Installing workspace dependencies..."
-npm install
+echo "📦 Installing workspace dependencies (including dev/build tools)..."
+npm install --include=dev
 
 if [ ! -f .env ]; then
     echo "❌ ERROR: Root .env file missing! Create it before running."

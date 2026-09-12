@@ -10,6 +10,7 @@ import { ChevronLeft, Trash2, Palette } from 'lucide-react'
 import { useLocation, useMatch, useNavigate } from '@tanstack/react-router'
 import Layout from '../components/Layout'
 import DynamicToast from '../components/DynamicToast'
+import LoadingScreen from '../LoadingScreen'
 import { apiClient } from '../../api/axios'
 
 import {
@@ -469,6 +470,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
     onToggleMaterialCost,
     onAutoSave,
     onExportExcel,
+    quantityEnabledServices = new Set(),
+    onQuantityEnabledServicesChange,
   },
   ref,
 ) {
@@ -1034,10 +1037,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           [columnKey]: checked,
         }
 
-        // When service is checked, auto-set qty to 1 if qty column exists for this service
+        // When service is checked, auto-set qty to 1 if qty column exists for this service AND quantity is enabled for this service
         if (checked) {
+          const serviceKey = normalizeHeaderKey(columnKey)
+          const isQtyEnabledForService = quantityEnabledServices.has(serviceKey)
           const qtyColumn = columns.find((col) => col.quantityMeta?.relatedServiceKey === columnKey)
-          if (qtyColumn) {
+          if (qtyColumn && isQtyEnabledForService) {
             nextValues[qtyColumn.key] = 1
           }
         }
@@ -1586,12 +1591,27 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                           const serviceKey = normalizeHeaderKey(
                             column.serviceMeta?.serviceKey || column.key,
                           )
+                          const isChecked = quantityEnabledServices.has(serviceKey)
 
                           return (
                             <label
                               key={serviceKey}
-                              className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-200"
+                              className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-200 cursor-pointer hover:bg-gray-700"
                             >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const newSet = new Set(quantityEnabledServices)
+                                  if (e.target.checked) {
+                                    newSet.add(serviceKey)
+                                  } else {
+                                    newSet.delete(serviceKey)
+                                  }
+                                  onQuantityEnabledServicesChange?.(newSet)
+                                }}
+                                className="w-3 h-3 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500 focus:ring-offset-gray-800"
+                              />
                               <span>{column.header}</span>
                             </label>
                           )
@@ -3542,6 +3562,7 @@ export default function StatementDetails() {
   const [initialRows, setInitialRows] = useState([])
   const [vatPerRow, setVatPerRow] = useState(false)
   const [quantityMode, setQuantityMode] = useState('off')
+  const [quantityEnabledServices, setQuantityEnabledServices] = useState(new Set())
   const [includeDrNo, setIncludeDrNo] = useState(true)
   const [includeRtNo, setIncludeRtNo] = useState(true)
   const [includeMaterialCost, setIncludeMaterialCost] = useState(true)
@@ -3815,10 +3836,12 @@ export default function StatementDetails() {
         soa_sub_total: options.soa_sub_total,
         soa_vat: options.soa_vat,
         soa_total: options.soa_total,
-        headers: columns.map((col) => ({
-          key: col.key,
-          header: col.header,
-        })),
+        headers: columns
+          .filter((col) => !col.quantityMeta) // Don't include dynamically generated QTY columns in headers
+          .map((col) => ({
+            key: col.key,
+            header: col.header,
+          })),
         columnMeta: columns
           .filter((column) => column.key && (column.serviceMeta || column.quantityMeta))
           .map((column) => ({
@@ -4132,6 +4155,40 @@ export default function StatementDetails() {
       }
     }
 
+    // Deduplicate headers to prevent duplicate columns
+    const seenHeaders = new Set()
+    const seenServiceKeys = new Set()
+    rawHeaders = rawHeaders.filter((header) => {
+      const headerText = String(
+        typeof header === 'object' ? header.header || header.key || header : header,
+      )
+      const normalizedHeader = headerText.trim().toLowerCase()
+      
+      // Check for duplicate header text
+      if (seenHeaders.has(normalizedHeader)) {
+        return false
+      }
+      
+      // Also check for duplicate service matches to prevent same service appearing twice
+      const normalizedServiceHeader = normalizeServiceId(headerText)
+      const serviceMatch = services.find((service) => {
+        const serviceId = normalizeServiceId(service.id)
+        const serviceName = normalizeServiceId(service.name)
+        return serviceId === normalizedServiceHeader || serviceName === normalizedServiceHeader
+      })
+      
+      if (serviceMatch) {
+        const serviceKey = normalizeHeaderKey(serviceMatch.name || serviceMatch.id)
+        if (seenServiceKeys.has(serviceKey)) {
+          return false
+        }
+        seenServiceKeys.add(serviceKey)
+      }
+      
+      seenHeaders.add(normalizedHeader)
+      return true
+    })
+
     const columns = []
     const seenColumnKeys = new Set()
     const toSlug = (value = '') =>
@@ -4222,8 +4279,8 @@ export default function StatementDetails() {
             : null,
         })
 
-        // Add QTY column for this service when quantity mode is enabled
-        const isQtyCheckedForThisService = quantityMode === 'add'
+        // Add QTY column for this service when quantity mode is enabled and this service is checked
+        const isQtyCheckedForThisService = quantityMode === 'add' && quantityEnabledServices.has(serviceKey)
 
         if (serviceMatch && isQtyCheckedForThisService) {
           columns.push({
@@ -4239,7 +4296,7 @@ export default function StatementDetails() {
       })
 
     return columns
-  }, [services, statement?.soa_headers, quantityMode])
+  }, [services, statement?.soa_headers, quantityMode, quantityEnabledServices])
 
   const visibleTableColumns = useMemo(() => {
     const baseColumns = dynamicTableColumns
@@ -4366,11 +4423,7 @@ export default function StatementDetails() {
         title="Statement Pipeline"
         user={{ name: 'Administrator', role: 'Admin', initials: 'AD' }}
       >
-        <div className="flex items-center justify-center h-[calc(100vh-110px)]">
-          <div className="text-xs font-bold uppercase tracking-widest text-gray-400 animate-pulse">
-            Syncing Ledger Parameters...
-          </div>
-        </div>
+        <LoadingScreen label="Loading Statement" subLabel="Fetching data from database..." />
       </Layout>
     )
   }
@@ -4602,6 +4655,8 @@ export default function StatementDetails() {
             onToggleRtNo={handleToggleRtNo}
             includeMaterialCost={includeMaterialCost}
             onToggleMaterialCost={handleToggleMaterialCost}
+            quantityEnabledServices={quantityEnabledServices}
+            onQuantityEnabledServicesChange={setQuantityEnabledServices}
             onAutoSave={triggerAutoSave}
             onExportExcel={requestExcelExport}
             ref={tableRef}
