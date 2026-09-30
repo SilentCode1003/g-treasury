@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts'
 import { apiClient } from '../../api/axios'
+import { useSession } from '../../contexts/SessionContext'
 
 /* ---------------------------------- tokens --------------------------------- */
 
@@ -403,6 +404,7 @@ function useLoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const { setSessionExpiration } = useSession()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -429,6 +431,17 @@ function useLoginForm() {
       if (userData) {
         localStorage.setItem('user', JSON.stringify(userData))
         console.log('User stored in localStorage:', userData)
+        console.log('Session expiration time from backend:', userData.sessionExpiresAt)
+
+        // Store session expiration time
+        if (userData.sessionExpiresAt) {
+          setSessionExpiration(userData.sessionExpiresAt)
+          console.log('Session expiration time stored:', userData.sessionExpiresAt)
+          console.log('Current time:', Date.now())
+          console.log('Time until expiry:', userData.sessionExpiresAt - Date.now())
+        } else {
+          console.error('No sessionExpiresAt in response data')
+        }
       }
 
       setStatus('success')

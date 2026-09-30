@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { apiClient } from '../../api/axios'
+import { useSession } from '../../contexts/SessionContext'
 
 export default function Header({
   title,
@@ -8,12 +8,12 @@ export default function Header({
   onSearch,
   notificationCount = 0,
   user,
-  onLogout,
 }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const menuRef = useRef(null)
   const navigate = useNavigate()
+  const { performLogout, clearSessionExpiration } = useSession()
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -36,22 +36,13 @@ export default function Header({
     setIsLoggingOut(true)
     setProfileOpen(false)
 
-    try {
-      await apiClient.post('/credentials/logout')
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.clear()
-        window.localStorage.clear()
-      }
-      await navigate({ to: '/login' })
-    } catch (error) {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.clear()
-        window.localStorage.clear()
-      }
-      await navigate({ to: '/login' })
-    } finally {
-      setIsLoggingOut(false)
-    }
+    // Clear session expiration from localStorage
+    clearSessionExpiration()
+
+    // Use the session context's performLogout (which already handles the API call)
+    await performLogout()
+
+    setIsLoggingOut(false)
   }
 
   return (

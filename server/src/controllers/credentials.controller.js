@@ -86,6 +86,10 @@ const login = async (req, res) => {
 
     req.session.jwt = token
 
+    // Calculate session expiration time (using 24 hours)
+    const sessionMaxAge = 24 * 60 * 60 * 1000
+    const sessionExpiresAt = Date.now() + sessionMaxAge
+
     const { sql: accessSql, bindings: accessBindings } = sql
       .select([
         { col: Master.master_route_access.selectOptionColumns.name, as: 'name' },
@@ -108,6 +112,7 @@ const login = async (req, res) => {
         access_id: user.access_id,
         status: user.status,
         routes: accessRoutes,
+        sessionExpiresAt,
       },
     })
   } catch (error) {

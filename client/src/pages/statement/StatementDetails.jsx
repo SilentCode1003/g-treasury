@@ -99,352 +99,57 @@ const normalizeHeaderKey = (value = '') =>
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '')
 
-const MaintenanceTable = React.forwardRef(function MaintenanceTable(
-  { statementId, documentMeta, onSave, initialRows, saving, onTotalsChange },
-  ref,
-) {
-  // Inject CSS keyframes for fade animation
-  useEffect(() => {
-    const style = document.createElement('style')
-    style.textContent = fadeInKeyframes
-    document.head.appendChild(style)
-    return () => {
-      document.head.removeChild(style)
-    }
-  }, [])
+const determineStatementTypeFromHeaders = (headers) => {
+  if (!headers) return { statement_type: 'SERVICE', maintenance_format: 'REGIONAL_SUMMARY' }
 
-  const [rows, setRows] = useState(() => {
-    if (Array.isArray(initialRows) && initialRows.length > 0) {
-      return initialRows.map((r, i) => ({
-        id: r.id || `row-${i + 1}`,
-        values: r.values || r,
-      }))
-    }
-    return [
-      {
-        id: 'row-1',
-        values: {
-          area: '',
-          noOfStore: '',
-          pricePerStore: 350,
-          totalAmount: 0,
-          serviceType: 'MAINTENANCE',
-          workDone: 'REPAIR AND MAINTENANCE',
-        },
-      },
-    ]
-  })
-  const [cities, setCities] = useState([])
-  const [loadingCities, setLoadingCities] = useState(true)
-  const [activeAreaDropdown, setActiveAreaDropdown] = useState(null)
-  const [focusedNumericField, setFocusedNumericField] = useState(null)
-
-  // Sync rows with initialRows when initialRows changes (e.g., after save)
-  useEffect(() => {
-    if (Array.isArray(initialRows) && initialRows.length > 0) {
-      setRows(
-        initialRows.map((r, i) => ({
-          id: r.id || `row-${i + 1}`,
-          values: r.values || r,
-          color: r.color || null,
-        })),
-      )
-    }
-  }, [initialRows])
-
-  // Fetch unique cities on component mount
-  React.useEffect(() => {
-    const fetchCities = async () => {
-      try {
-        const response = await apiClient.get('/store/unique-cities')
-        const citiesData = response.data.data || []
-        // Deduplicate on frontend to ensure uniqueness
-        const uniqueCities = [...new Set(citiesData.filter((c) => c && c.trim() !== ''))]
-        setCities(uniqueCities)
-      } catch (error) {
-        console.error('Error fetching cities:', error)
-      } finally {
-        setLoadingCities(false)
-      }
-    }
-    fetchCities()
-  }, [])
-
-  const filteredCities = (searchTerm) => {
-    if (!searchTerm || searchTerm.trim() === '') return cities
-    return cities.filter((city) =>
-      String(city).toLowerCase().includes(String(searchTerm).toLowerCase()),
-    )
+  let parsedHeaders = []
+  try {
+    parsedHeaders = typeof headers === 'string' ? JSON.parse(headers) : headers
+  } catch (e) {
+    parsedHeaders = Array.isArray(headers) ? headers : []
   }
 
-  const handleRowChange = (rowId, field, value) => {
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.id === rowId) {
-          const newValues = { ...row.values, [field]: value }
-          // Calculate total amount if noOfStore or pricePerStore changes
-          if (field === 'noOfStore' || field === 'pricePerStore') {
-            const noOfStore = Number(newValues.noOfStore || 0)
-            const pricePerStore = Number(newValues.pricePerStore || 0)
-            const computedTotal = noOfStore * pricePerStore
-            newValues.totalAmount = computedTotal
-          }
-          return { ...row, values: newValues }
-        }
-        return row
-      }),
-    )
+  // Extract header names (handles both string arrays and object arrays with header property)
+  const headerNames = parsedHeaders.map(h => {
+    if (typeof h === 'string') return h.toLowerCase()
+    if (typeof h === 'object' && h.header) return h.header.toLowerCase()
+    return ''
+  }).filter(Boolean)
+
+  // Check for maintenance formats
+  const hasArea = headerNames.some(h => h.includes('area'))
+  const hasNoOfStore = headerNames.some(h => h.includes('no of store') || h.includes('no_of_store'))
+  const hasPricePerStore = headerNames.some(h => h.includes('price per store') || h.includes('price_per_store'))
+  const hasTotalAmount = headerNames.some(h => h.includes('total amount'))
+
+  const hasInvoice = headerNames.some(h => h.includes('invoice'))
+  const hasTicketNumber = headerNames.some(h => h.includes('ticket') || h.includes('ticket number'))
+  const hasPartsDescription = headerNames.some(h => h.includes('parts') || h.includes('parts description'))
+  const hasPartsQty = headerNames.some(h => h.includes('qty') || h.includes('parts qty'))
+
+  const hasServiceDate = headerNames.some(h => h.includes('service date'))
+  const hasWorkDone = headerNames.some(h => h.includes('work done'))
+  const hasVatEx = headerNames.some(h => h.includes('vat-ex') || h.includes('vat_ex'))
+  const hasVatIn = headerNames.some(h => h.includes('vat-in') || h.includes('vat_in'))
+
+  // Determine format based on header patterns
+  if (hasArea && hasNoOfStore && hasPricePerStore && hasTotalAmount) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'REGIONAL_SUMMARY' }
   }
 
-  const addRow = () => {
-    setRows((prev) => [
-      ...prev,
-      {
-        id: `row-${prev.length + 1}`,
-        values: { area: '', noOfStore: '', pricePerStore: 350, totalAmount: 0 },
-      },
-    ])
+  if (hasInvoice && hasTicketNumber && hasPartsDescription && hasPartsQty) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'ITEMIZED_PARTS' }
   }
 
-  const removeRow = (rowId) => {
-    setRows((prev) => prev.filter((row) => row.id !== rowId))
+  if (hasInvoice && hasServiceDate && hasWorkDone && hasVatEx && hasVatIn) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'OFFICIAL_INVOICE' }
   }
 
-  const handleSave = () => {
-    onSave?.(
-      rows,
-      [
-        { label: 'AREA' },
-        { label: 'NO OF STORE' },
-        { label: 'PRICE PER STORE' },
-        { label: 'TOTAL AMOUNT' },
-      ],
-      { vatMode: false, quantityMode: false },
-    )
-  }
+  // Default to SERVICE if no maintenance pattern matches
+  return { statement_type: 'SERVICE', maintenance_format: 'REGIONAL_SUMMARY' }
+}
 
-  // Calculate totals
-  const subTotal = rows.reduce((sum, row) => sum + (Number(row.values.totalAmount) || 0), 0)
-  const vat = Number((subTotal * 0.12).toFixed(2))
-  const total = Number((subTotal + vat).toFixed(2))
 
-  const maintenanceColumns = [
-    { key: 'area', header: 'AREA' },
-    { key: 'noOfStore', header: 'NO OF STORE' },
-    { key: 'pricePerStore', header: 'PRICE PER STORE' },
-    { key: 'totalAmount', header: 'TOTAL AMOUNT' },
-  ]
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      saveRows: handleSave,
-      getRows: () => rows,
-      getColumns: () => maintenanceColumns,
-      exportPdf: () =>
-        exportStatementToPdf({
-          columns: maintenanceColumns,
-          rows,
-          documentMeta,
-          statementId,
-          totals: { subTotal, vat, total },
-        }),
-      generatePdfPreview: async (showSubtotal, showVat, showTotal) =>
-        exportStatementToPdf({
-          columns: maintenanceColumns,
-          rows,
-          documentMeta,
-          statementId,
-          totals: { subTotal, vat, total },
-          showSubtotal,
-          showVat,
-          showTotal,
-        }),
-    }),
-    [rows, documentMeta, statementId, subTotal, vat, total],
-  )
-
-  React.useEffect(() => {
-    onTotalsChange?.({ subTotal, vat, total })
-  }, [subTotal, vat, total, onTotalsChange])
-
-  return (
-    <div className="rounded border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                AREA
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                NO OF STORE
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                PRICE PER STORE
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                TOTAL AMOUNT
-              </th>
-              <th className="px-4 py-3 w-10"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {rows.map((row, index) => (
-              <tr key={row.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2">
-                  {loadingCities ? (
-                    <input
-                      type="text"
-                      value={row.values.area || ''}
-                      onChange={(e) => handleRowChange(row.id, 'area', e.target.value)}
-                      className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                      placeholder="Loading cities..."
-                      disabled
-                    />
-                  ) : (
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={row.values.area || ''}
-                        onChange={(e) => {
-                          handleRowChange(row.id, 'area', e.target.value)
-                          setActiveAreaDropdown(row.id)
-                        }}
-                        onFocus={() => setActiveAreaDropdown(row.id)}
-                        onBlur={() => {
-                          setTimeout(() => setActiveAreaDropdown(null), 150)
-                        }}
-                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                        placeholder="Search or type area"
-                      />
-                      {activeAreaDropdown === row.id &&
-                        filteredCities(row.values.area).length > 0 && (
-                          <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
-                            {filteredCities(row.values.area).map((city) => (
-                              <button
-                                key={city}
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault()
-                                  handleRowChange(row.id, 'area', city)
-                                  setActiveAreaDropdown(null)
-                                }}
-                                className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100"
-                              >
-                                {city}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  {(() => {
-                    const fieldKey = `${row.id}-noOfStore`
-                    const isFocused = focusedNumericField === fieldKey
-                    const value = row.values.noOfStore || 0
-                    return (
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={isFocused ? String(value) : formatQuantityInput(value)}
-                        onChange={(e) => {
-                          const nextValue = e.target.value.replace(/[^0-9]/g, '')
-                          handleRowChange(
-                            row.id,
-                            'noOfStore',
-                            nextValue === '' ? 0 : Number(nextValue),
-                          )
-                        }}
-                        onFocus={() => setFocusedNumericField(fieldKey)}
-                        onBlur={(e) => {
-                          setFocusedNumericField(null)
-                          const formatted = formatQuantityInput(value)
-                          handleRowChange(row.id, 'noOfStore', parseDecimalInput(formatted))
-                        }}
-                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                        placeholder="0"
-                      />
-                    )
-                  })()}
-                </td>
-                <td className="px-4 py-2">
-                  {(() => {
-                    const fieldKey = `${row.id}-pricePerStore`
-                    const isFocused = focusedNumericField === fieldKey
-                    const value = row.values.pricePerStore || 350
-                    return (
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={isFocused ? String(value) : formatNumberInput(value)}
-                        onChange={(e) => {
-                          const nextValue = e.target.value.replace(/[^0-9.]/g, '')
-                          // Keep as string if it ends with dot or has decimal being typed
-                          if (
-                            nextValue.endsWith('.') ||
-                            (nextValue.includes('.') && nextValue.split('.')[1].length <= 2)
-                          ) {
-                            handleRowChange(row.id, 'pricePerStore', nextValue)
-                          } else {
-                            handleRowChange(
-                              row.id,
-                              'pricePerStore',
-                              nextValue === '' ? 0 : Number(nextValue),
-                            )
-                          }
-                        }}
-                        onFocus={() => setFocusedNumericField(fieldKey)}
-                        onBlur={(e) => {
-                          setFocusedNumericField(null)
-                          const formatted = formatNumberInput(value)
-                          handleRowChange(row.id, 'pricePerStore', parseDecimalInput(formatted))
-                        }}
-                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                        placeholder="0.00"
-                      />
-                    )
-                  })()}
-                </td>
-                <td className="px-4 py-2">
-                  <div className="w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-mono">
-                    {formatNumberInput(row.values.totalAmount || 0)}
-                  </div>
-                </td>
-                <td className="px-4 py-2">
-                  <button
-                    onClick={() => removeRow(row.id)}
-                    className="text-red-500 hover:text-red-700"
-                    disabled={rows.length === 1}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
-        <button
-          onClick={addRow}
-          className="text-xs font-bold uppercase tracking-wider text-black hover:text-gray-700"
-        >
-          + Add Row
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="rounded bg-black px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    </div>
-  )
-})
 
 const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   {
@@ -482,6 +187,26 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
         return { id: r.id || `row-${i + 1}`, values: r.values || r, color: r.color || null }
       })
     }
+
+    // For Regional Summary format, initialize with default values
+    const isRegionalSummary = columns.some(
+      (col) => String(col.header || '').toUpperCase() === 'AREA',
+    )
+    if (isRegionalSummary) {
+      return [
+        {
+          id: 'row-1',
+          values: {
+            area: '',
+            noOfStore: '',
+            pricePerStore: 350,
+            totalAmount: 0,
+          },
+          color: null,
+        },
+      ]
+    }
+
     return [{ id: 'row-1', values: {}, color: null }]
   })
 
@@ -4133,6 +3858,17 @@ export default function StatementDetails() {
 
   // Extract dynamic headers from schema array or string parameters
   const dynamicTableColumns = useMemo(() => {
+    // For Regional Summary (Area-based) maintenance, use fixed columns
+    const typeFromHeaders = determineStatementTypeFromHeaders(statement?.soa_headers)
+    if (typeFromHeaders.statement_type === 'MAINTENANCE' && typeFromHeaders.maintenance_format === 'REGIONAL_SUMMARY') {
+      return [
+        { key: 'area', header: 'AREA', align: 'left' },
+        { key: 'noOfStore', header: 'NO OF STORE', align: 'left' },
+        { key: 'pricePerStore', header: 'PRICE PER STORE', align: 'left' },
+        { key: 'totalAmount', header: 'TOTAL AMOUNT', align: 'left' },
+      ]
+    }
+
     if (!statement?.soa_headers) return []
 
     let rawHeaders = []
@@ -4378,21 +4114,27 @@ export default function StatementDetails() {
   }, [statementId, savedQuantitySelection])
 
   const documentMeta = useMemo(
-    () => ({
-      fromCompany: companyMap[statement?.soa_company_from] || {
-        name: statement?.soa_company_from || '',
-      },
-      toCompany: companyMap[statement?.soa_company_to] || {
-        name: statement?.soa_company_to || '',
-      },
-      title: statement?.soa_title || 'STATEMENT OF ACCOUNT',
-      date: formatDateLabel(statement?.soa_date) || statement?.soa_date || '',
-      subTotal: statement?.soa_sub_total,
-      vat: statement?.soa_vat,
-      total: statement?.soa_total,
-      statementType: statement?.soa_statement_type || 'SERVICE',
-      maintenanceFormat: statement?.soa_maintenance_format || 'REGIONAL_SUMMARY',
-    }),
+    () => {
+      const headers = statement?.soa_headers
+      const typeFromHeaders = determineStatementTypeFromHeaders(headers)
+
+      return {
+        fromCompany: companyMap[statement?.soa_company_from] || {
+          name: statement?.soa_company_from || '',
+        },
+        toCompany: companyMap[statement?.soa_company_to] || {
+          name: statement?.soa_company_to || '',
+        },
+        title: statement?.soa_title || 'STATEMENT OF ACCOUNT',
+        date: formatDateLabel(statement?.soa_date) || statement?.soa_date || '',
+        subTotal: statement?.soa_sub_total,
+        vat: statement?.soa_vat,
+        total: statement?.soa_total,
+        // Always determine from headers to ensure correct type
+        statementType: typeFromHeaders.statement_type,
+        maintenanceFormat: typeFromHeaders.maintenance_format,
+      }
+    },
     [statement, companyMap],
   )
 
@@ -4594,49 +4336,14 @@ export default function StatementDetails() {
         </div>
 
         {/* Dynamic Table Ingestion Section */}
-        {documentMeta.statementType === 'MAINTENANCE' ? (
-          <>
-            {documentMeta.maintenanceFormat === 'REGIONAL_SUMMARY' && (
-              <MaintenanceTable
-                statementId={statementId}
-                documentMeta={documentMeta}
-                onSave={handleSaveRows}
-                initialRows={initialRows}
-                saving={savingRows}
-                onTotalsChange={setLiveMeta}
-                ref={tableRef}
-              />
-            )}
-            {documentMeta.maintenanceFormat === 'ITEMIZED_PARTS' && (
-              <ItemizedPartsTable
-                statementId={statementId}
-                documentMeta={documentMeta}
-                onSave={handleSaveRows}
-                initialRows={initialRows}
-                saving={savingRows}
-                onTotalsChange={setLiveMeta}
-                ref={tableRef}
-              />
-            )}
-            {documentMeta.maintenanceFormat === 'OFFICIAL_INVOICE' && (
-              <div className="rounded border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">
-                  Official Invoice Format
-                </p>
-                <div className="text-sm text-gray-600">
-                  <p>Official invoice format will be rendered here.</p>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Format: NO | INVOICE | SERVICE DATE | AREA | SERVICE TYPE | WORK DONE | NO OF
-                    STORE | AMOUNT PER STORE | TOTAL VAT-EX | TOTAL VAT-IN
-                  </p>
-                </div>
-              </div>
-            )}
-          </>
-        ) : visibleTableColumns.length > 0 ? (
+        {visibleTableColumns.length > 0 ? (
           <StatementDetailTable
             columns={visibleTableColumns}
-            registryLabel="Dynamic Core Statement Schema Columns"
+            registryLabel={
+              visibleTableColumns.some((col) => String(col.header || '').toUpperCase() === 'AREA')
+                ? 'Regional Summary (Area-based)'
+                : 'Dynamic Core Statement Schema Columns'
+            }
             footerLabel="System Audit Framework Active Verification Matrix"
             footerMeta="Encrypted Node Sync Complete"
             statementId={statementId}

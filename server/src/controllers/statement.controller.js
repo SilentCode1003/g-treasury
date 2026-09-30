@@ -5,6 +5,7 @@ const {
   buildStatementCreatePayload,
   calculateStatementSaveTotal,
   buildStatementHeaders,
+  determineStatementTypeFromHeaders,
 } = require('../utilities/statement.util')
 
 const sql = new SQLQueryBuilder()
@@ -218,6 +219,11 @@ const updateStatement = async (req, res, next) => {
       })
     }
 
+    // Determine statement type from headers if not provided
+    const typeFromHeaders = determineStatementTypeFromHeaders(headers)
+    const finalStatementType = statement_type || typeFromHeaders.statement_type
+    const finalMaintenanceFormat = maintenance_format || typeFromHeaders.maintenance_format
+
     const updateData = {}
     if (company_from !== undefined) updateData.company_from = company_from
     if (company_to !== undefined) updateData.company_to = company_to
@@ -230,8 +236,8 @@ const updateStatement = async (req, res, next) => {
     if (vat !== undefined) updateData.vat = Number(vat || 0)
     if (total !== undefined) updateData.total = Number(total || 0)
     if (prepared_by !== undefined) updateData.prepared_by = prepared_by
-    if (statement_type !== undefined) updateData.statement_type = statement_type
-    if (maintenance_format !== undefined) updateData.maintenance_format = maintenance_format
+    if (statement_type !== undefined || headers !== undefined) updateData.statement_type = finalStatementType
+    if (maintenance_format !== undefined || headers !== undefined) updateData.maintenance_format = finalMaintenanceFormat
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({

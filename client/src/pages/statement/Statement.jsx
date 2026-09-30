@@ -121,18 +121,64 @@ const buildHeadersFromServices = (
   return hasVatHeader ? [...headers, '%VAT'] : headers
 }
 
-const mapStatement = (item) => ({
-  id: item.soa_id ?? item.id,
-  company_from: item.soa_company_from ?? item.company_from ?? '',
-  company_to: item.soa_company_to ?? item.company_to ?? '',
-  date: item.soa_date ?? item.date ?? '',
-  title: item.soa_title ?? item.title ?? 'Untitled statement',
-  headers: item.soa_headers ?? item.headers ?? null,
-  sub_total: Number(item.soa_sub_total ?? item.sub_total ?? 0),
-  vat: Number(item.soa_vat ?? item.vat ?? 0),
-  total: Number(item.soa_total ?? item.total ?? 0),
-  prepared_by: item.soa_prepared_by ?? item.prepared_by ?? '',
-})
+const determineStatementTypeFromHeaders = (headers) => {
+  if (!headers) return { statement_type: 'SERVICE', maintenance_format: 'REGIONAL_SUMMARY' }
+
+  const normalizedHeaders = normalizeStoredHeaders(headers).map(h => h.toLowerCase())
+
+  // Check for maintenance formats
+  const hasArea = normalizedHeaders.some(h => h.includes('area'))
+  const hasNoOfStore = normalizedHeaders.some(h => h.includes('no of store') || h.includes('no_of_store'))
+  const hasPricePerStore = normalizedHeaders.some(h => h.includes('price per store') || h.includes('price_per_store'))
+  const hasTotalAmount = normalizedHeaders.some(h => h.includes('total amount'))
+
+  const hasInvoice = normalizedHeaders.some(h => h.includes('invoice'))
+  const hasTicketNumber = normalizedHeaders.some(h => h.includes('ticket') || h.includes('ticket number'))
+  const hasPartsDescription = normalizedHeaders.some(h => h.includes('parts') || h.includes('parts description'))
+  const hasPartsQty = normalizedHeaders.some(h => h.includes('qty') || h.includes('parts qty'))
+
+  const hasServiceDate = normalizedHeaders.some(h => h.includes('service date'))
+  const hasWorkDone = normalizedHeaders.some(h => h.includes('work done'))
+  const hasVatEx = normalizedHeaders.some(h => h.includes('vat-ex') || h.includes('vat_ex'))
+  const hasVatIn = normalizedHeaders.some(h => h.includes('vat-in') || h.includes('vat_in'))
+
+  // Determine format based on header patterns
+  if (hasArea && hasNoOfStore && hasPricePerStore && hasTotalAmount) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'REGIONAL_SUMMARY' }
+  }
+
+  if (hasInvoice && hasTicketNumber && hasPartsDescription && hasPartsQty) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'ITEMIZED_PARTS' }
+  }
+
+  if (hasInvoice && hasServiceDate && hasWorkDone && hasVatEx && hasVatIn) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'OFFICIAL_INVOICE' }
+  }
+
+  // Default to SERVICE if no maintenance pattern matches
+  return { statement_type: 'SERVICE', maintenance_format: 'REGIONAL_SUMMARY' }
+}
+
+const mapStatement = (item) => {
+  const headers = item.soa_headers ?? item.headers ?? null
+  const typeFromHeaders = determineStatementTypeFromHeaders(headers)
+
+  return {
+    id: item.soa_id ?? item.id,
+    company_from: item.soa_company_from ?? item.company_from ?? '',
+    company_to: item.soa_company_to ?? item.company_to ?? '',
+    date: item.soa_date ?? item.date ?? '',
+    title: item.soa_title ?? item.title ?? 'Untitled statement',
+    headers: headers,
+    sub_total: Number(item.soa_sub_total ?? item.sub_total ?? 0),
+    vat: Number(item.soa_vat ?? item.vat ?? 0),
+    total: Number(item.soa_total ?? item.total ?? 0),
+    prepared_by: item.soa_prepared_by ?? item.prepared_by ?? '',
+    // Always infer from headers to ensure correct type
+    statement_type: typeFromHeaders.statement_type,
+    maintenance_format: typeFromHeaders.maintenance_format,
+  }
+}
 
 const mapCompanyOption = (item) => {
   const id = item?.mc_id ?? item?.company_id ?? item?.id ?? item?.companyId
@@ -241,6 +287,7 @@ export default function Statement() {
     const hasRtNo = normalizedRowHeaders.some((header) => normalizeHeaderKey(header) === 'rtno')
     const hasMaterialCost = normalizedRowHeaders.some((header) => normalizeHeaderKey(header) === 'materialcost')
 
+    // Use the statement_type and maintenance_format from the row (already determined by mapStatement)
     setEditForm({
       id: row.id,
       company_from: String(row.company_from || ''),
@@ -981,6 +1028,24 @@ export default function Statement() {
                 />
                 <span className="text-sm text-gray-700">Include Material Cost</span>
               </label>
+            </div>
+            )}
+            {editForm.statement_type === 'SERVICE' && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Title
+              </label>
+              <input
+                value={editForm.title || editGeneratedTitle}
+                onChange={(e) => {
+                  setEditForm((prev) => ({
+                    ...prev,
+                    title: e.target.value,
+                  }))
+                }}
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+                placeholder="Enter statement title"
+              />
             </div>
             )}
             {editForm.statement_type === 'MAINTENANCE' && (
