@@ -6,7 +6,7 @@ import React, {
   useImperativeHandle,
   useCallback,
 } from 'react'
-import { ChevronLeft, Trash2, Palette } from 'lucide-react'
+import { ChevronLeft, Trash2, Palette, FileText, Table } from 'lucide-react'
 import { useLocation, useMatch, useNavigate } from '@tanstack/react-router'
 import Layout from '../components/Layout'
 import DynamicToast from '../components/DynamicToast'
@@ -4255,16 +4255,18 @@ export default function StatementDetails() {
                     console.error('Failed to generate PDF preview:', err)
                   }
                 }}
-                className="inline-flex items-center rounded border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50"
+                className="inline-flex items-center gap-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-red-700 transition-colors hover:bg-red-100"
               >
+                <FileText size={14} />
                 Export PDF
               </button>
 
               <button
                 type="button"
                 onClick={() => tableRef.current?.exportExcel()}
-                className="inline-flex items-center rounded border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50"
+                className="inline-flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
               >
+                <Table size={14} />
                 Export Excel
               </button>
             </div>
@@ -4406,7 +4408,12 @@ export default function StatementDetails() {
       {excelNameModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-gray-900">Export Excel</h2>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
+                <Table size={20} className="text-green-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Export Excel</h2>
+            </div>
             <p className="mt-1 text-sm text-gray-500">Choose a filename or use the default name.</p>
             <input
               autoFocus
@@ -4415,7 +4422,7 @@ export default function StatementDetails() {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') confirmExcelExport()
               }}
-              className="mt-4 w-full rounded border border-gray-300 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              className="mt-4 w-full rounded border border-gray-300 px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
               placeholder={`statement-${statementId || 'export'}`}
             />
             <div className="mt-5 flex justify-end gap-2">
@@ -4430,7 +4437,7 @@ export default function StatementDetails() {
                 type="button"
                 onClick={confirmExcelExport}
                 disabled={excelExporting}
-                className="rounded bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+                className="rounded bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
               >
                 {excelExporting ? 'Exporting...' : 'Use This Name'}
               </button>
@@ -4444,7 +4451,12 @@ export default function StatementDetails() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full h-[95vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">PDF Preview</h2>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100">
+                  <FileText size={20} className="text-red-600" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">PDF Preview</h2>
+              </div>
               <button
                 onClick={() => setPdfPreviewOpen(false)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -4551,7 +4563,7 @@ export default function StatementDetails() {
                       link.download = `statement-${statementId || 'export'}.pdf`
                       link.click()
                     }}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
                   >
                     Download PDF
                   </button>
@@ -4564,7 +4576,7 @@ export default function StatementDetails() {
                         }
                       }
                     }}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-md hover:bg-gray-700 transition-colors"
                   >
                     Print
                   </button>

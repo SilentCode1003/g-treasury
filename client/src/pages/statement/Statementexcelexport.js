@@ -249,6 +249,7 @@ const rawCellValue = (
   columns,
   tableColumnOffset,
   excelRowNumber,
+  isBulkExport = false,
 ) => {
   if (isRowNumberColumn(column)) return rowIndex + 1
 
@@ -291,6 +292,21 @@ const rawCellValue = (
         'total_amount',
         'totalAmount',
       ])
+    } else if (header === 'area' || colKey === 'area') {
+      value = extractFieldValue(row.values, row, ['area', 'Area', 'AREA'])
+    } else if (header.includes('no of store') || colKey === 'noOfStore' || colKey === 'no_of_store') {
+      value = extractFieldValue(row.values, row, ['noOfStore', 'no_of_store', 'noOfStore', 'NO OF STORE'])
+    } else if (header.includes('price per store') || colKey === 'pricePerStore' || colKey === 'price_per_store') {
+      value = extractFieldValue(row.values, row, ['pricePerStore', 'price_per_store', 'PRICE PER STORE'])
+    } else if (header.includes('total amount') || colKey === 'totalAmount' || colKey === 'total_amount') {
+      value = extractFieldValue(row.values, row, ['totalAmount', 'total_amount', 'TOTAL AMOUNT'])
+    } else if (header.includes('additional sales') || colKey.includes('additional_sales') || colKey === 'additionalSales') {
+      value = extractFieldValue(row.values, row, [
+        'additional_sales',
+        'additionalSales',
+        'additional_sales_mobilization',
+        'additionalSalesMobilization',
+      ])
     }
   }
 
@@ -315,13 +331,36 @@ const rawCellValue = (
       (col) => /^price$/i.test(String(col.header || '')) || col.key === 'price' || col.key === 'unitPrice',
     )
 
-    if (partsQtyColIndex !== -1 && priceColIndex !== -1) {
-      const partsQtyColLetter = getColumnLetter(partsQtyColIndex + tableColumnOffset)
-      const priceColLetter = getColumnLetter(priceColIndex + tableColumnOffset)
+    // Skip formula generation in bulk export to avoid circular references
+    if (!isBulkExport && partsQtyColIndex !== -1 && priceColIndex !== -1 && columnIndex !== partsQtyColIndex && columnIndex !== priceColIndex) {
+      const partsQtyColLetter = getColumnLetter(partsQtyColIndex + 1 + tableColumnOffset)
+      const priceColLetter = getColumnLetter(priceColIndex + 1 + tableColumnOffset)
       const numResult = parseNumericValue(value)
 
       return {
         formula: `IF(OR(${partsQtyColLetter}${excelRowNumber}="",${priceColLetter}${excelRowNumber}=""),0,${partsQtyColLetter}${excelRowNumber}*${priceColLetter}${excelRowNumber})`,
+        result: numResult,
+      }
+    }
+  }
+
+  // Formula generation for Regional Summary TOTAL AMOUNT (NO OF STORE * PRICE PER STORE)
+  if (header.includes('total amount') || colKey === 'totalAmount' || colKey === 'total_amount') {
+    const noOfStoreColIndex = columns.findIndex(
+      (col) => /no\s*of\s*store/i.test(String(col.header || '')) || col.key === 'noOfStore' || col.key === 'no_of_store',
+    )
+    const pricePerStoreColIndex = columns.findIndex(
+      (col) => /price\s*per\s*store/i.test(String(col.header || '')) || col.key === 'pricePerStore' || col.key === 'price_per_store',
+    )
+
+    // Skip formula generation in bulk export to avoid circular references
+    if (!isBulkExport && noOfStoreColIndex !== -1 && pricePerStoreColIndex !== -1 && columnIndex !== noOfStoreColIndex && columnIndex !== pricePerStoreColIndex) {
+      const noOfStoreColLetter = getColumnLetter(noOfStoreColIndex + 1 + tableColumnOffset)
+      const pricePerStoreColLetter = getColumnLetter(pricePerStoreColIndex + 1 + tableColumnOffset)
+      const numResult = parseNumericValue(value)
+
+      return {
+        formula: `IF(OR(${noOfStoreColLetter}${excelRowNumber}="",${pricePerStoreColLetter}${excelRowNumber}=""),0,${noOfStoreColLetter}${excelRowNumber}*${pricePerStoreColLetter}${excelRowNumber})`,
         result: numResult,
       }
     }
@@ -346,19 +385,20 @@ const styleCell = (
   if (number) cell.numFmt = '#,##0.00'
 }
 
-export const exportStatementToExcel = async ({
+// Helper function to build a worksheet (used for both single and bulk export)
+const buildWorksheetContent = async ({
+  workbook,
+  worksheet,
   columns,
   rows,
   documentMeta = {},
   statementId,
-  filename,
   totals = {},
+  cachedImageId = null,
+  skipLogo = false,
+  isBulkExport = false,
 }) => {
-  const workbook = new ExcelJS.Workbook()
-  const worksheet = workbook.addWorksheet('SOA')
-  worksheet.views = [{ state: 'normal', showGridLines: true }]
-
-  const tableColumnOffset = 1
+  const tableColumnOffset = 0 // Start table at column A
   const tableColumnCount = Math.max(columns.length, 4)
   const colCount = tableColumnCount + tableColumnOffset
   const lastColumnLetter = worksheet.getColumn(colCount).letter
@@ -366,7 +406,6 @@ export const exportStatementToExcel = async ({
   const expandedRows = processRowsForExport(rows)
 
   worksheet.columns = new Array(colCount).fill(null).map(() => ({ width: 18 }))
-  worksheet.getColumn(1).width = 3
 
   columns.forEach((column, index) => {
     const header = String(column.header || '').trim().toLowerCase()
@@ -385,12 +424,28 @@ export const exportStatementToExcel = async ({
     }
   })
 
-  // Embed Logo
-  try {
-    const imageId = workbook.addImage({ base64: await toDataUrl(logo), extension: 'png' })
-    worksheet.addImage(imageId, { tl: { col: 1.05, row: 0.5 }, ext: { width: 110, height: 75 } })
-  } catch (error) {
-    // Ignore logo errors
+  // Embed Logo (use cached image ID if provided, otherwise add it)
+  // Skip logo if skipLogo flag is true (for bulk exports to avoid corruption)
+  if (!skipLogo) {
+    let imageId = cachedImageId
+    if (!imageId) {
+      try {
+        imageId = workbook.addImage({ base64: await toDataUrl(logo), extension: 'png' })
+      } catch (error) {
+        // Ignore logo errors
+      }
+    }
+    if (imageId) {
+      try {
+        // Position logo with absolute dimensions to maintain actual size
+        worksheet.addImage(imageId, {
+          tl: { col: 0.2, row: 0.8 },
+          ext: { width: 100, height: 70 }
+        })
+      } catch (error) {
+        // Ignore image placement errors
+      }
+    }
   }
 
   const from = documentMeta.fromCompany || {}
@@ -398,14 +453,14 @@ export const exportStatementToExcel = async ({
   let currentRow = 1
 
   const writeHeaderRow = (rowNum, text, { size = 10, bold = false } = {}) => {
-    const startCell = `C${rowNum}`
+    const startCell = `A${rowNum}`
     const endCell = `${lastColumnLetter}${rowNum}`
 
     worksheet.mergeCells(`${startCell}:${endCell}`)
     const cell = worksheet.getCell(startCell)
     cell.value = text
     cell.font = { name: 'Calibri', size, bold, color: { argb: 'FF000000' } }
-    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+    cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 12, wrapText: true }
     worksheet.getRow(rowNum).height = 20
   }
 
@@ -512,6 +567,7 @@ export const exportStatementToExcel = async ({
         columns,
         tableColumnOffset,
         currentRowNumber,
+        isBulkExport,
       )
 
       cell.value =
@@ -534,7 +590,7 @@ export const exportStatementToExcel = async ({
 
       if (row.isMainRow && row.rowSpan && row.rowSpan > 1) {
         if (!['parts_description', 'parts_qty', 'price', 'subtotal'].includes(column.key)) {
-          const colLetter = getColumnLetter(columnIndex + tableColumnOffset)
+          const colLetter = getColumnLetter(columnIndex + 1 + tableColumnOffset)
           mergeTracker.push({
             range: `${colLetter}${currentRowNumber}:${colLetter}${currentRowNumber + row.rowSpan - 1}`,
           })
@@ -584,7 +640,12 @@ export const exportStatementToExcel = async ({
     const labelCell = worksheet.getCell(`${labelColumnLetter}${rowNumber}`)
     const valueCell = worksheet.getCell(`${valueColumnLetter}${rowNumber}`)
     labelCell.value = label
-    valueCell.value = { formula, result: parseNumericValue(result) }
+    // In bulk export, use static values instead of formulas to avoid circular references
+    if (isBulkExport) {
+      valueCell.value = parseNumericValue(result)
+    } else {
+      valueCell.value = { formula, result: parseNumericValue(result) }
+    }
     styleCell(labelCell, { bold, align: 'left', fontSize: 10 })
     styleCell(valueCell, { bold, number: true, align: 'right', fontSize: 10 })
   }
@@ -617,14 +678,14 @@ export const exportStatementToExcel = async ({
   if (tableColumnCount <= 4) {
     prepStartIdx = 2
     prepEndIdx = 2
-    recStartIdx = 5
-    recEndIdx = 5
+    recStartIdx = 4
+    recEndIdx = 4
   } else {
-    const spanSize = Math.max(1, Math.floor((tableColumnCount - 1) / 2))
-    prepStartIdx = 1 + tableColumnOffset
+    const spanSize = Math.max(1, Math.floor((tableColumnCount - 2) / 2))
+    prepStartIdx = 2 + tableColumnOffset
     prepEndIdx = prepStartIdx + spanSize - 1
-    recEndIdx = tableColumnCount + tableColumnOffset
-    recStartIdx = recEndIdx - spanSize + 1
+    recStartIdx = prepEndIdx + 2 // Add gap of 1 column between
+    recEndIdx = recStartIdx + spanSize - 1
   }
 
   const prepStartLetter = getColumnLetter(prepStartIdx - 1)
@@ -664,20 +725,78 @@ export const exportStatementToExcel = async ({
       bottom: { style: 'medium', color: { argb: 'FF000000' } },
     }
   }
+}
 
-  const safeName = String(filename || `statement-${statementId || 'export'}`)
-    .replace(/[\\/:*?"<>|]/g, '')
-    .trim() || `statement-${statementId || 'export'}`
-  const finalName = safeName.toLowerCase().endsWith('.xlsx') ? safeName : `${safeName}.xlsx`
+export const exportStatementToExcel = async ({
+  columns,
+  rows,
+  documentMeta = {},
+  statementId,
+  filename,
+  totals = {},
+  workbook = null,
+  sheetName = 'SOA',
+  cachedImageId = null,
+  skipLogo = false,
+  maintenanceFormat = null,
+}) => {
+  const workbookInstance = workbook || new ExcelJS.Workbook()
+  const isBulkExport = workbook !== null // Detect bulk export mode
+  // Sanitize sheet name (Excel has restrictions on sheet names)
+  const sanitizedSheetName = sheetName
+    .replace(/[\\/?*[\]]/g, '_') // Remove invalid characters
+    .substring(0, 31) // Max 31 characters
+    .replace(/^\\$/g, '') // Don't start with backslash
+    .trim() || 'SOA'
 
-  const buffer = await workbook.xlsx.writeBuffer()
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  console.log(`Adding worksheet with name: "${sanitizedSheetName}"`)
+
+  const worksheet = workbookInstance.addWorksheet(sanitizedSheetName)
+  worksheet.views = [{ state: 'normal', showGridLines: true }]
+
+  // Cache image ID for bulk export (only add logo once to workbook)
+  let imageId = cachedImageId
+  if (!imageId && !workbook && !skipLogo) {
+    try {
+      imageId = workbookInstance.addImage({ base64: await toDataUrl(logo), extension: 'png' })
+    } catch (error) {
+      // Ignore logo errors
+    }
+  }
+
+  await buildWorksheetContent({
+    workbook: workbookInstance,
+    worksheet,
+    columns,
+    rows,
+    documentMeta,
+    statementId,
+    totals,
+    cachedImageId: imageId,
+    skipLogo,
+    isBulkExport,
   })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = finalName
-  link.click()
-  URL.revokeObjectURL(url)
+
+  // Only download if filename is provided (single export mode)
+  // If workbook was passed in (bulk export mode), return it instead
+  if (filename && !workbook) {
+    const safeName = String(filename)
+      .replace(/[\\/:*?"<>|]/g, '')
+      .trim() || `statement-${statementId || 'export'}`
+    const finalName = safeName.toLowerCase().endsWith('.xlsx') ? safeName : `${safeName}.xlsx`
+
+    const buffer = await workbookInstance.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = finalName
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Return workbook for bulk export mode
+  return workbookInstance
 }

@@ -439,18 +439,18 @@ const getStatementItems = async (req, res, next) => {
       return res.status(200).json({ success: true, data: [], message: 'No items found' })
     }
 
-    // Expect si_items to be JSON stored as string
-    const payload = items.map((it) => {
+    // Expect items to be JSON stored as string
+    // Each item is a row object with values, vatMode, headers, etc.
+    const rows = items.map((it) => {
       try {
-        const parsed = typeof it.si_items === 'string' ? JSON.parse(it.si_items) : it.si_items
+        const parsed = typeof it.items === 'string' ? JSON.parse(it.items) : it.items
+        // Return the row object directly (contains values, color, etc.)
         return parsed
       } catch (err) {
-        return []
+        console.error('Error parsing item:', err)
+        return null
       }
-    })
-
-    // If multiple rows exist take the first
-    const rows = Array.isArray(payload[0]) ? payload[0] : payload.flat()
+    }).filter(Boolean) // Remove any null items from parse errors
 
     return res.status(200).json({ success: true, data: rows })
   } catch (error) {

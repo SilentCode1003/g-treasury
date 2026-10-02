@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Edit, Eye } from 'lucide-react'
+import { Edit, Eye, Download, FileText, Table } from 'lucide-react'
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import Layout from '../components/Layout'
 import DynamicTable from '../components/DynamicTable'
@@ -7,6 +7,8 @@ import Modal from '../components/Modal'
 import DynamicToast from '../components/DynamicToast'
 import LoadingScreen from '../LoadingScreen'
 import { apiClient } from '../../api/axios'
+import { exportStatementToPdf } from './Statementpdfexport'
+import { exportStatementToExcel } from './Statementexcelexport'
 
 const formatCurrency = (value) =>
   Number(value || 0).toLocaleString('en-PH', {
@@ -174,9 +176,9 @@ const mapStatement = (item) => {
     vat: Number(item.soa_vat ?? item.vat ?? 0),
     total: Number(item.soa_total ?? item.total ?? 0),
     prepared_by: item.soa_prepared_by ?? item.prepared_by ?? '',
-    // Always infer from headers to ensure correct type
-    statement_type: typeFromHeaders.statement_type,
-    maintenance_format: typeFromHeaders.maintenance_format,
+    // Use database values first, fall back to header inference
+    statement_type: item.soa_statement_type ?? item.statement_type ?? typeFromHeaders.statement_type,
+    maintenance_format: item.soa_maintenance_format ?? item.maintenance_format ?? typeFromHeaders.maintenance_format,
   }
 }
 
@@ -202,6 +204,7 @@ export default function Statement() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [hoveredRowId, setHoveredRowId] = useState(null)
+  const [selectedStatements, setSelectedStatements] = useState(new Set())
   const [form, setForm] = useState({
     company_from: '',
     company_to: '',
@@ -228,9 +231,22 @@ export default function Statement() {
   const loadCompanies = async () => {
     try {
       const response = await apiClient.get('/company')
-      const companyList = (response.data?.data || [])
-        .map(mapCompanyOption)
-        .filter((item) => item.id !== '')
+      const companyList = (response.data?.data || []).map((item) => ({
+        id: item.mc_id ?? item.company_id ?? item.id ?? item.companyId,
+        name: item.mc_name ?? item.name ?? item.company_name ?? item.companyName,
+        address:
+          item.mc_address ?? item.address ?? item.company_address ?? item.companyAddress ?? '',
+        mobile:
+          item.mc_mobile_number ?? item.mobile_number ?? item.mobile ?? item.company_mobile ?? '',
+        phone:
+          item.mc_telephone_number ??
+          item.telephone_number ??
+          item.phone ??
+          item.company_phone ??
+          '',
+        email:
+          item.mc_email ?? item.email ?? item.company_email ?? '',
+      })).filter((item) => item.id !== '')
       setCompanies(companyList)
     } catch (err) {
       setError('Unable to load company options at the moment.')
@@ -442,7 +458,15 @@ export default function Statement() {
   const companyMap = useMemo(() => {
     const map = {}
     companies.forEach((company) => {
-      map[company.id] = company.name
+      if (company.id) {
+        map[company.id] = {
+          name: company.name || company.id,
+          address: company.address || '',
+          mobile: company.mobile || '',
+          phone: company.phone || '',
+          email: company.email || '',
+        }
+      }
     })
     return map
   }, [companies])
@@ -464,23 +488,321 @@ export default function Statement() {
 
   const filteredStatements = useMemo(() => {
     return statements.filter((statement) => {
+      const fromCompanyName = companyMap[statement.company_from]?.name || String(statement.company_from)
+      const toCompanyName = companyMap[statement.company_to]?.name || String(statement.company_to)
+      
       const matchesSearch =
         statement.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         String(statement.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
         statement.prepared_by.toLowerCase().includes(searchQuery.toLowerCase()) ||
         statement.date.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(statement.company_from).toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(statement.company_to).toLowerCase().includes(searchQuery.toLowerCase())
+        fromCompanyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        toCompanyName.toLowerCase().includes(searchQuery.toLowerCase())
 
       return matchesSearch
     })
-  }, [statements, searchQuery])
+  }, [statements, searchQuery, companyMap])
 
   const metrics = useMemo(() => {
     const total = filteredStatements.length
     const totalValue = filteredStatements.reduce((acc, curr) => acc + curr.total, 0)
     return { total, totalValue }
   }, [filteredStatements])
+
+  const handleBulkPdfExport = async () => {
+    if (selectedStatements.size === 0) {
+      showToast('error', 'Please select at least one statement to export.')
+      return
+    }
+
+    try {
+      const selectedIds = Array.from(selectedStatements)
+      const selectedData = statements.filter((s) => selectedIds.includes(s.id))
+
+      // Fetch detailed data for each selected statement
+      const statementDetails = await Promise.all(
+        selectedData.map(async (statement) => {
+          try {
+            const response = await apiClient.get(`/statement/${statement.id}/items`)
+            console.log(`Statement ${statement.id} (${statement.title}) items response:`, response.data)
+            const data = response.data?.data || response.data || []
+            const rows = Array.isArray(data) ? data : (data.rows || data.items || [])
+            console.log(`Statement ${statement.id} has ${rows.length} rows`)
+            return {
+              ...statement,
+              details: data,
+              rows: rows,
+              columns: data.columns || [],
+            }
+          } catch (err) {
+            console.error(`Failed to fetch details for statement ${statement.id}:`, err)
+            return { ...statement, details: null, rows: [], columns: [] }
+          }
+        })
+      )
+
+      // Use pdf-lib to merge multiple PDFs into one
+      const { PDFDocument } = await import('pdf-lib')
+      const mergedPdf = await PDFDocument.create()
+
+      for (const stmt of statementDetails) {
+        try {
+          // Determine maintenance format from headers or statement
+          const typeFromHeaders = determineStatementTypeFromHeaders(stmt.headers || stmt.details?.soa_headers)
+          const maintenanceFormat = stmt.maintenance_format || typeFromHeaders.maintenance_format
+
+          // For Regional Summary (Area-based) maintenance, use fixed columns
+          let columns
+          if (typeFromHeaders.statement_type === 'MAINTENANCE' && maintenanceFormat === 'REGIONAL_SUMMARY') {
+            columns = [
+              { key: 'area', header: 'AREA', align: 'left' },
+              { key: 'noOfStore', header: 'NO OF STORE', align: 'left' },
+              { key: 'pricePerStore', header: 'PRICE PER STORE', align: 'left' },
+              { key: 'totalAmount', header: 'TOTAL AMOUNT', align: 'left' },
+            ]
+          } else {
+            const headers = normalizeStoredHeaders(stmt.headers || stmt.details?.soa_headers)
+            columns = headers.map((h, idx) => ({
+              key: String(h).toLowerCase().replace(/[^a-z0-9]/g, '_'),
+              header: h,
+            }))
+          }
+
+          // Transform rows to match expected format for PDF export
+          const rawRows = stmt.rows || stmt.details?.rows || []
+          console.log(`Statement ${stmt.id} raw rows:`, rawRows)
+          const rows = rawRows.map(row => {
+            // If row has values property, use it; otherwise use row directly
+            const values = row.values || row
+            console.log(`Row values:`, values)
+            return {
+              id: row.id || `row-${Math.random()}`,
+              values: values,
+              color: row.color || null,
+              parts: row.parts || values.parts, // Preserve parts array for multi-row items
+            }
+          })
+
+          const documentMeta = {
+            fromCompany: companyMap[stmt.company_from] || { name: String(stmt.company_from) },
+            toCompany: companyMap[stmt.company_to] || { name: String(stmt.company_to) },
+            title: stmt.title,
+            date: stmt.date,
+            subTotal: stmt.sub_total,
+            vat: stmt.vat,
+            total: stmt.total,
+          }
+
+          const totals = {
+            subTotal: stmt.sub_total,
+            vat: stmt.vat,
+            total: stmt.total,
+          }
+
+          // Generate PDF for this statement
+          const blob = await exportStatementToPdf({
+            columns,
+            rows,
+            documentMeta,
+            statementId: stmt.id,
+            totals,
+          })
+
+          // Load the generated PDF and copy its pages to the merged PDF
+          const arrayBuffer = await blob.arrayBuffer()
+          const stmtPdf = await PDFDocument.load(arrayBuffer)
+          const copiedPages = await mergedPdf.copyPages(stmtPdf, stmtPdf.getPageIndices())
+          copiedPages.forEach((page) => mergedPdf.addPage(page))
+        } catch (err) {
+          console.error(`Failed to export statement ${stmt.id}:`, err)
+        }
+      }
+
+      // Download the merged PDF
+      const mergedPdfBytes = await mergedPdf.save()
+      const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `bulk-statements-export-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      showToast('success', `Exported ${selectedStatements.size} statement(s) to PDF.`)
+    } catch (err) {
+      console.error('Bulk PDF export failed:', err)
+      showToast('error', 'Failed to export statements to PDF.')
+    }
+  }
+
+  const handleBulkExcelExport = async () => {
+    if (selectedStatements.size === 0) {
+      showToast('error', 'Please select at least one statement to export.')
+      return
+    }
+
+    try {
+      const selectedIds = Array.from(selectedStatements)
+      const selectedData = statements.filter((s) => selectedIds.includes(s.id))
+
+      // Create Excel with multiple tabs using ExcelJS
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+
+      // Add logo to workbook once and cache the image ID for reuse
+      let cachedImageId = null
+      try {
+        const logoResponse = await fetch(new URL('../../../assets/logo.png', import.meta.url))
+        const logoBlob = await logoResponse.blob()
+        const logoDataUrl = await new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result)
+          reader.readAsDataURL(logoBlob)
+        })
+        cachedImageId = workbook.addImage({ base64: logoDataUrl, extension: 'png' })
+        console.log('Logo added to workbook with ID:', cachedImageId)
+      } catch (error) {
+        console.error('Failed to add logo to workbook:', error)
+      }
+
+      // Process each statement independently
+      const sheetNameTracker = new Set() // Track used sheet names to avoid duplicates
+      
+      for (const statement of selectedData) {
+        try {
+          console.log(`Processing statement ${statement.id}: ${statement.title}`)
+
+          // Fetch detailed data for this statement
+          const response = await apiClient.get(`/statement/${statement.id}/items`)
+          console.log(`Statement ${statement.id} API response:`, response.data)
+
+          const data = response.data?.data || response.data || []
+          const rawRows = Array.isArray(data) ? data : (data.rows || data.items || [])
+          console.log(`Statement ${statement.id} has ${rawRows.length} raw rows`)
+          
+          // Log first row structure for debugging
+          if (rawRows.length > 0) {
+            console.log(`Statement ${statement.id} first row structure:`, JSON.stringify(rawRows[0], null, 2))
+          }
+          
+          // Validate that we have rows before proceeding
+          if (!rawRows || rawRows.length === 0) {
+            console.warn(`Statement ${statement.id} has no rows, creating empty sheet`)
+            // Still create the sheet even if empty
+          }
+
+          // Transform rows to match expected format for Excel export
+          const rows = rawRows.map(row => {
+            const values = row.values || row
+            // Ensure the row object has all necessary properties
+            return {
+              id: row.id || `row-${Math.random()}`,
+              values: values,
+              color: row.color || null,
+              parts: row.parts || values.parts, // Preserve parts array for multi-row items
+            }
+          })
+
+          // Determine maintenance format from headers or statement
+          const typeFromHeaders = determineStatementTypeFromHeaders(statement.headers || data.headers)
+          const maintenanceFormat = statement.maintenance_format || typeFromHeaders.maintenance_format
+
+          // For Regional Summary (Area-based) maintenance, use fixed columns
+          let columns
+          if (typeFromHeaders.statement_type === 'MAINTENANCE' && maintenanceFormat === 'REGIONAL_SUMMARY') {
+            columns = [
+              { key: 'area', header: 'AREA', align: 'left' },
+              { key: 'noOfStore', header: 'NO OF STORE', align: 'left' },
+              { key: 'pricePerStore', header: 'PRICE PER STORE', align: 'left' },
+              { key: 'totalAmount', header: 'TOTAL AMOUNT', align: 'left' },
+            ]
+          } else {
+            const headers = normalizeStoredHeaders(statement.headers || data.headers)
+            columns = headers.map((h, idx) => ({
+              key: String(h).toLowerCase().replace(/[^a-z0-9]/g, '_'),
+              header: h,
+            }))
+          }
+
+          const documentMeta = {
+            fromCompany: companyMap[statement.company_from] || { name: String(statement.company_from) },
+            toCompany: companyMap[statement.company_to] || { name: String(statement.company_to) },
+            title: statement.title,
+            date: statement.date,
+            subTotal: statement.sub_total,
+            vat: statement.vat,
+            total: statement.total,
+          }
+
+          const totals = {
+            subTotal: statement.sub_total,
+            vat: statement.vat,
+            total: statement.total,
+          }
+
+          // Create a unique worksheet name for this statement
+          let safeTitle = statement.title.replace(/[^a-z0-9]/gi, '_').substring(0, 20)
+          let sheetName = safeTitle.substring(0, 31) || `SOA-${statement.id}`
+          
+          // Ensure sheet name is unique
+          let counter = 1
+          let uniqueSheetName = sheetName
+          while (sheetNameTracker.has(uniqueSheetName)) {
+            uniqueSheetName = `${sheetName.substring(0, 28)}_${counter}`
+            counter++
+          }
+          sheetNameTracker.add(uniqueSheetName)
+          
+          console.log(`Creating worksheet "${uniqueSheetName}" with ${rows.length} rows`)
+
+          await exportStatementToExcel({
+            columns,
+            rows,
+            documentMeta,
+            statementId: statement.id,
+            filename: null, // Don't download immediately
+            totals,
+            workbook, // Pass the workbook to add sheet
+            sheetName: uniqueSheetName,
+            cachedImageId, // Pass cached logo image ID
+            skipLogo: false, // Don't skip logo - we're using cached image
+            maintenanceFormat: statement.maintenance_format, // Pass maintenance format
+          })
+
+          console.log(`Successfully created worksheet for statement ${statement.id}`)
+        } catch (err) {
+          console.error(`Failed to export statement ${statement.id}:`, err)
+          console.error('Error details:', err.response?.data || err.message)
+          console.error('Full error stack:', err.stack)
+          // Continue with next statement even if this one fails
+        }
+      }
+
+      // Download the workbook
+      console.log('Writing workbook to buffer...')
+      console.log(`Total worksheets in workbook: ${workbook.worksheets.length}`)
+      workbook.worksheets.forEach((ws, idx) => {
+        console.log(`  Worksheet ${idx + 1}: "${ws.name}"`)
+      })
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `bulk-statements-export-${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      showToast('success', `Exported ${workbook.worksheets.length} statement(s) to Excel.`)
+    } catch (err) {
+      console.error('Bulk Excel export failed:', err)
+      showToast('error', 'Failed to export statements to Excel.')
+    }
+  }
 
   const isStatementDetailRoute =
     location.pathname !== '/statement' && location.pathname.startsWith('/statement/')
@@ -490,6 +812,26 @@ export default function Statement() {
   }
 
   const baseColumns = [
+    {
+      header: '',
+      key: 'select',
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedStatements.has(row.id)}
+          onChange={(e) => {
+            const newSelected = new Set(selectedStatements)
+            if (e.target.checked) {
+              newSelected.add(row.id)
+            } else {
+              newSelected.delete(row.id)
+            }
+            setSelectedStatements(newSelected)
+          }}
+          className="cursor-pointer"
+        />
+      ),
+    },
     {
       header: 'ID',
       key: 'id',
@@ -510,8 +852,8 @@ export default function Statement() {
       header: 'Company From',
       key: 'company_from',
       render: (row) => (
-        <div className="text-neutral-500 max-w-[200px] truncate" title={companyMap[row.company_from] || row.company_from}>
-          {companyMap[row.company_from] || row.company_from}
+        <div className="text-neutral-500 max-w-[200px] truncate" title={companyMap[row.company_from]?.name || row.company_from}>
+          {companyMap[row.company_from]?.name || row.company_from}
         </div>
       ),
     },
@@ -519,8 +861,8 @@ export default function Statement() {
       header: 'Company To',
       key: 'company_to',
       render: (row) => (
-        <div className="text-neutral-500 max-w-[200px] truncate" title={companyMap[row.company_to] || row.company_to}>
-          {companyMap[row.company_to] || row.company_to}
+        <div className="text-neutral-500 max-w-[200px] truncate" title={companyMap[row.company_to]?.name || row.company_to}>
+          {companyMap[row.company_to]?.name || row.company_to}
         </div>
       ),
     },
@@ -621,6 +963,24 @@ export default function Statement() {
             </div>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-center">
+            {selectedStatements.size > 0 && (
+              <>
+                <button
+                  onClick={handleBulkPdfExport}
+                  className="inline-flex items-center gap-2 rounded border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-red-700 transition-colors duration-150 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-600"
+                >
+                  <FileText size={16} />
+                  Export PDF ({selectedStatements.size})
+                </button>
+                <button
+                  onClick={handleBulkExcelExport}
+                  className="inline-flex items-center gap-2 rounded border border-green-200 bg-green-50 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-green-700 transition-colors duration-150 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-600"
+                >
+                  <Table size={16} />
+                  Export Excel ({selectedStatements.size})
+                </button>
+              </>
+            )}
             <button
               onClick={() => setModalOpen(true)}
               className="inline-flex items-center gap-2 rounded bg-black px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors duration-150 hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-red-600"
