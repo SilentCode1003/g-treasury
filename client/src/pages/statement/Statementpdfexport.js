@@ -24,35 +24,23 @@ export const exportStatementToPdf = ({ columns, rows, documentMeta = {}, stateme
     const marginRight = pageWidth - marginLeft
     let cursorY = 40
 
-    // ----- Add Logo -----
-    const logoSize = 75
-    const logoHeight = 65
-    const logoAreaPadding = 15
-    try {
-      doc.addImage(logo, 'PNG', marginLeft, 12, logoSize, logoHeight)
-      cursorY = 40
-    } catch (err) {
-      // Fallback if logo fails to load
-    }
-
     const textBlack = [0, 0, 0]
     const textDark = [30, 41, 59]
     const textMuted = [100, 116, 139]
     const tableHeaderBg = [241, 245, 249]
     const borderLight = [203, 213, 225]
 
-    // ----- Date Block (Top Right) -----
-    if (documentMeta.date) {
-      doc.setFontSize(9)
-      doc.setFont(undefined, 'bold')
-      doc.setTextColor(textDark[0], textDark[1], textDark[2])
-      doc.text('DATE:', marginRight - 140, cursorY)
-      doc.setFont(undefined, 'normal')
-      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2])
-      doc.text(String(formatDateLabel(documentMeta.date) || documentMeta.date), marginRight - 100, cursorY)
+    // ----- Add Logo (same level as FROM/TO, lowered to align with FROM) -----
+    const logoSize = 75
+    const logoHeight = 65
+    const logoAreaPadding = 15
+    try {
+      doc.addImage(logo, 'PNG', marginLeft, cursorY - 18, logoSize, logoHeight)
+    } catch (err) {
+      // Fallback if logo fails to load
     }
 
-    const drawCompanyBlock = (label, companyData, leftPos = marginLeft) => {
+    const drawCompanyBlock = (label, companyData, leftPos = marginLeft, maxWidth = null) => {
       doc.setFontSize(10)
       doc.setFont(undefined, 'bold')
       doc.setTextColor(textBlack[0], textBlack[1], textBlack[2])
@@ -69,7 +57,25 @@ export const exportStatementToPdf = ({ columns, rows, documentMeta = {}, stateme
       let lineY = cursorY
       if (companyData.address) {
         lineY += 14
-        doc.text(companyData.address, textLeft, lineY)
+        const addressText = companyData.address
+        if (maxWidth) {
+          // Split address if it exceeds max width
+          const maxChars = Math.floor(maxWidth / 6) // Approximate chars per line
+          if (addressText.length > maxChars) {
+            const lines = []
+            for (let i = 0; i < addressText.length; i += maxChars) {
+              lines.push(addressText.substring(i, i + maxChars))
+            }
+            lines.forEach((line, idx) => {
+              doc.text(line, textLeft, lineY + (idx * 14))
+            })
+            lineY += (lines.length - 1) * 14
+          } else {
+            doc.text(addressText, textLeft, lineY)
+          }
+        } else {
+          doc.text(addressText, textLeft, lineY)
+        }
       }
       const contact = buildContactLine(companyData)
       if (contact) {
@@ -80,13 +86,27 @@ export const exportStatementToPdf = ({ columns, rows, documentMeta = {}, stateme
       return lineY
     }
 
-    // ----- From Block -----
+    // ----- From Block (to the right of logo, with set width) -----
     const fromLeftPos = marginLeft + logoSize + logoAreaPadding
-    const endOfFromY = drawCompanyBlock('From:', from, fromLeftPos)
+    const fromMaxWidth = 450 // Set max width for FROM block
+    const endOfFromY = drawCompanyBlock('From:', from, fromLeftPos, fromMaxWidth)
     cursorY = endOfFromY + 22
 
-    // ----- To Block -----
-    const endOfToY = drawCompanyBlock('To:', to, fromLeftPos)
+    // ----- To Block (with set width to avoid conflict with date) -----
+    const toMaxWidth = 450 // Set max width for TO block
+    const endOfToY = drawCompanyBlock('To:', to, fromLeftPos, toMaxWidth)
+    
+    // ----- Date Block (same row as TO, on the right) -----
+    if (documentMeta.date) {
+      doc.setFontSize(9)
+      doc.setFont(undefined, 'bold')
+      doc.setTextColor(textDark[0], textDark[1], textDark[2])
+      doc.text('DATE:', marginRight - 140, cursorY)
+      doc.setFont(undefined, 'normal')
+      doc.setTextColor(textMuted[0], textMuted[1], textMuted[2])
+      doc.text(String(formatDateLabel(documentMeta.date) || documentMeta.date), marginRight - 100, cursorY)
+    }
+    
     cursorY = endOfToY + 25
 
     // ----- Title Block Dividers & Text -----
@@ -96,6 +116,7 @@ export const exportStatementToPdf = ({ columns, rows, documentMeta = {}, stateme
     doc.line(marginLeft, cursorY, marginRight, cursorY)
 
     cursorY += 16
+
     doc.setFontSize(9)
     doc.setFont(undefined, 'bold')
     doc.setTextColor(textDark[0], textDark[1], textDark[2])

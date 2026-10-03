@@ -5,6 +5,7 @@ const {
   buildStatementCreatePayload,
   calculateStatementSaveTotal,
   buildStatementHeaders,
+  determineStatementTypeFromHeaders,
 } = require('../utilities/statement.util')
 
 const sql = new SQLQueryBuilder()
@@ -218,6 +219,11 @@ const updateStatement = async (req, res, next) => {
       })
     }
 
+    // Determine statement type from headers if not provided
+    const typeFromHeaders = determineStatementTypeFromHeaders(headers)
+    const finalStatementType = statement_type || typeFromHeaders.statement_type
+    const finalMaintenanceFormat = maintenance_format || typeFromHeaders.maintenance_format
+
     const updateData = {}
     if (company_from !== undefined) updateData.company_from = company_from
     if (company_to !== undefined) updateData.company_to = company_to
@@ -230,8 +236,8 @@ const updateStatement = async (req, res, next) => {
     if (vat !== undefined) updateData.vat = Number(vat || 0)
     if (total !== undefined) updateData.total = Number(total || 0)
     if (prepared_by !== undefined) updateData.prepared_by = prepared_by
-    if (statement_type !== undefined) updateData.statement_type = statement_type
-    if (maintenance_format !== undefined) updateData.maintenance_format = maintenance_format
+    if (statement_type !== undefined || headers !== undefined) updateData.statement_type = finalStatementType
+    if (maintenance_format !== undefined || headers !== undefined) updateData.maintenance_format = finalMaintenanceFormat
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({
@@ -433,18 +439,18 @@ const getStatementItems = async (req, res, next) => {
       return res.status(200).json({ success: true, data: [], message: 'No items found' })
     }
 
-    // Expect si_items to be JSON stored as string
-    const payload = items.map((it) => {
+    // Expect items to be JSON stored as string
+    // Each item is a row object with values, vatMode, headers, etc.
+    const rows = items.map((it) => {
       try {
-        const parsed = typeof it.si_items === 'string' ? JSON.parse(it.si_items) : it.si_items
+        const parsed = typeof it.items === 'string' ? JSON.parse(it.items) : it.items
+        // Return the row object directly (contains values, color, etc.)
         return parsed
       } catch (err) {
-        return []
+        console.error('Error parsing item:', err)
+        return null
       }
-    })
-
-    // If multiple rows exist take the first
-    const rows = Array.isArray(payload[0]) ? payload[0] : payload.flat()
+    }).filter(Boolean) // Remove any null items from parse errors
 
     return res.status(200).json({ success: true, data: rows })
   } catch (error) {

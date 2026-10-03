@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { hasRouteAccess, getAccessLevel } from '../../utils/routeProtection';
+import { useSession } from '../../contexts/SessionContext';
 
 const RouteProtection = ({ children, routeName }) => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { checkSessionExpiration } = useSession();
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
@@ -15,13 +17,16 @@ const RouteProtection = ({ children, routeName }) => {
 
   useEffect(() => {
     if (!isLoading && user) {
+      // Check session expiration
+      checkSessionExpiration();
+      
       if (!hasRouteAccess(routeName, user)) {
         // Redirect to dashboard if no access
         navigate({ to: '/dashboard' });
         return;
       }
     }
-  }, [user, isLoading, navigate, routeName]);
+  }, [user, isLoading, navigate, routeName, checkSessionExpiration]);
 
   if (isLoading) {
     return (

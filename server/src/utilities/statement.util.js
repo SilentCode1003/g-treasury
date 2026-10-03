@@ -12,9 +12,64 @@ const buildStatementTitle = (services = []) => {
   return `STATEMENT OF ACCOUNT FOR ${joined} INSTALLATION, RENOVATION`
 }
 
+const determineStatementTypeFromHeaders = (headers = null) => {
+  if (!headers) return { statement_type: 'SERVICE', maintenance_format: 'REGIONAL_SUMMARY' }
+
+  let parsedHeaders = []
+  try {
+    parsedHeaders = typeof headers === 'string' ? JSON.parse(headers) : headers
+  } catch (e) {
+    parsedHeaders = Array.isArray(headers) ? headers : []
+  }
+
+  // Extract header names (handles both string arrays and object arrays with header property)
+  const headerNames = parsedHeaders.map(h => {
+    if (typeof h === 'string') return h.toLowerCase()
+    if (typeof h === 'object' && h.header) return h.header.toLowerCase()
+    return ''
+  }).filter(Boolean)
+
+  // Check for maintenance formats
+  const hasArea = headerNames.some(h => h.includes('area'))
+  const hasNoOfStore = headerNames.some(h => h.includes('no of store') || h.includes('no_of_store'))
+  const hasPricePerStore = headerNames.some(h => h.includes('price per store') || h.includes('price_per_store'))
+  const hasTotalAmount = headerNames.some(h => h.includes('total amount'))
+
+  const hasInvoice = headerNames.some(h => h.includes('invoice'))
+  const hasTicketNumber = headerNames.some(h => h.includes('ticket') || h.includes('ticket number'))
+  const hasPartsDescription = headerNames.some(h => h.includes('parts') || h.includes('parts description'))
+  const hasPartsQty = headerNames.some(h => h.includes('qty') || h.includes('parts qty'))
+
+  const hasServiceDate = headerNames.some(h => h.includes('service date'))
+  const hasWorkDone = headerNames.some(h => h.includes('work done'))
+  const hasVatEx = headerNames.some(h => h.includes('vat-ex') || h.includes('vat_ex'))
+  const hasVatIn = headerNames.some(h => h.includes('vat-in') || h.includes('vat_in'))
+
+  // Determine format based on header patterns
+  if (hasArea && hasNoOfStore && hasPricePerStore && hasTotalAmount) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'REGIONAL_SUMMARY' }
+  }
+
+  if (hasInvoice && hasTicketNumber && hasPartsDescription && hasPartsQty) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'ITEMIZED_PARTS' }
+  }
+
+  if (hasInvoice && hasServiceDate && hasWorkDone && hasVatEx && hasVatIn) {
+    return { statement_type: 'MAINTENANCE', maintenance_format: 'OFFICIAL_INVOICE' }
+  }
+
+  // Default to SERVICE if no maintenance pattern matches
+  return { statement_type: 'SERVICE', maintenance_format: 'REGIONAL_SUMMARY' }
+}
+
 const buildStatementCreatePayload = (body = {}, req = {}) => {
   const services = Array.isArray(body.services) ? body.services : []
   const preparedBy = body.prepared_by || req.session?.user?.fullname || req.context?.fullname || ''
+
+  // Determine statement type from headers if not provided
+  const typeFromHeaders = determineStatementTypeFromHeaders(body.headers)
+  const statement_type = body.statement_type || typeFromHeaders.statement_type
+  const maintenance_format = body.maintenance_format || typeFromHeaders.maintenance_format
 
   return {
     company_from: body.company_from,
@@ -26,6 +81,8 @@ const buildStatementCreatePayload = (body = {}, req = {}) => {
     vat: Number(body.vat || 0),
     total: Number(body.total || 0),
     prepared_by: preparedBy,
+    statement_type,
+    maintenance_format,
   }
 }
 
@@ -267,4 +324,5 @@ module.exports = {
   buildStatementCreatePayload,
   calculateStatementSaveTotal,
   buildStatementHeaders,
+  determineStatementTypeFromHeaders,
 }
