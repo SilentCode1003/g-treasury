@@ -3449,7 +3449,9 @@ export default function StatementDetails() {
 
       // load saved items for this statement (if any)
       try {
-        const itemsResp = await apiClient.get(`/statement/${statementId}/items`)
+        const itemsResp = await apiClient.get(`/statement/${statementId}/items`, {
+          params: { _t: Date.now() }, // Cache-busting parameter
+        })
         setInitialRows(itemsResp.data?.data || [])
       } catch (err) {
         setInitialRows([])
@@ -3465,7 +3467,9 @@ export default function StatementDetails() {
 
   const loadStatementItems = async () => {
     try {
-      const itemsResp = await apiClient.get(`/statement/${statementId}/items`)
+      const itemsResp = await apiClient.get(`/statement/${statementId}/items`, {
+        params: { _t: Date.now() }, // Cache-busting parameter
+      })
       setInitialRows(itemsResp.data?.data || [])
     } catch (err) {
       setInitialRows([])
