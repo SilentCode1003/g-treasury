@@ -26,7 +26,8 @@ const toDataUrl = async (source) => {
   })
 }
 
-// Convert column index (0-based) to Excel column letter
+// Convert a 0-based column index to an Excel column letter (0 -> A, 1 -> B, 26 -> AA)
+// ALWAYS pass a 0-based index here. Do NOT add +1.
 const getColumnLetter = (index) => {
   let letter = ''
   let temp = index
@@ -106,12 +107,92 @@ const parsePartsArray = (rawParts) => {
   return null
 }
 
+const isEmptyValue = (v) => v === undefined || v === null || v === ''
+
+// "DR NO." / "dr_no" / "drNo" all become "drno"
+const normalizeKey = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+// Merge two row objects; a non-empty value is never overwritten by an empty one
+const mergePreferNonEmpty = (base, override) => {
+  const result = { ...(base || {}) }
+  Object.entries(override || {}).forEach(([k, v]) => {
+    if (!isEmptyValue(v) || isEmptyValue(result[k])) result[k] = v
+  })
+  return result
+}
+
+// Extra field names to try for common columns, matched by the column header
+const HEADER_ALIASES = [
+  {
+    test: /^dr\s*(no|number|#)?\.?$/i,
+    keys: ['drNo', 'drNumber', 'dr', 'deliveryReceiptNo', 'deliveryReceiptNumber', 'deliveryReceipt'],
+  },
+  {
+    test: /^rt\s*(no|number|#)?\.?$/i,
+    keys: ['rtNo', 'rtNumber', 'rt'],
+  },
+  {
+    test: /store\s*(no|number|code)/i,
+    keys: ['storeNo', 'storeNumber', 'storeCode'],
+  },
+  {
+    test: /store\s*name/i,
+    keys: ['storeName', 'store'],
+  },
+]
+
+// Flatten row + row.values into { normalizedKey: primitiveValue }; values win, empties never win
+const buildRowIndex = (row) => {
+  const index = {}
+  const add = (obj) => {
+    if (!obj || typeof obj !== 'object') return
+    Object.entries(obj).forEach(([k, v]) => {
+      if (v !== null && typeof v === 'object') return // skip nested objects / arrays
+      const nk = normalizeKey(k)
+      if (!nk) return
+      if (!(nk in index) || isEmptyValue(index[nk])) index[nk] = v
+    })
+  }
+  add(row.values)
+  add(row)
+  return index
+}
+
+// Find a cell's value by column key, then column header, then known aliases
+const getRowValue = (row, column) => {
+  const index = buildRowIndex(row)
+  const header = String(column.header || '').trim()
+  const candidates = [column.key, header]
+  HEADER_ALIASES.forEach(({ test, keys }) => {
+    if (test.test(header)) candidates.push(...keys)
+  })
+
+  for (const candidate of candidates) {
+    const nk = normalizeKey(candidate)
+    if (!nk) continue
+    if (nk in index && !isEmptyValue(index[nk])) return index[nk]
+  }
+  return undefined
+}
+
+// Checkbox / service column helpers
+const isTruthyFlag = (v) =>
+  v === true ||
+  v === 1 ||
+  ['true', 'x', 'yes', 'y', '1', 'checked'].includes(String(v ?? '').trim().toLowerCase())
+
+const isBooleanLike = (v) =>
+  typeof v === 'boolean' ||
+  (typeof v === 'string' && ['true', 'false'].includes(v.trim().toLowerCase()))
+
+const SERVICE_HEADER_PATTERN = /^(new\s*store|renovation)$/i
+
 // Custom expand function that properly formats single rows and multi-part rows
 const processRowsForExport = (rows) => {
   const result = []
 
   rows.forEach((row) => {
-    const rowValues = { ...(row.values || {}), ...row }
+    const rowValues = mergePreferNonEmpty(row.values, row)
 
     // Check for parts array across row and rowValues
     const parts = parsePartsArray(row.parts) || parsePartsArray(rowValues.parts)
@@ -250,17 +331,19 @@ const rawCellValue = (
   tableColumnOffset,
   excelRowNumber,
   isBulkExport = false,
+  sheetName = '',
+  isServiceColumn = false,
 ) => {
-  if (isRowNumberColumn(column)) return rowIndex + 1
+  if (isRowNumberColumn(column)) return { value: rowIndex + 1, isRowNumber: true }
 
   const colKey = column.key
   const header = String(column.header || '').trim().toLowerCase()
 
-  // First try direct key on row.values or row if it's a primitive value
-  let value = row.values?.[colKey] ?? row[colKey]
-  if (typeof value === 'object' && value !== null && !value.formula) {
-    value = undefined
-  }
+  // Letter for a column index in the `columns` array (0-based index -> Excel letter)
+  const letterFor = (colIndex) => getColumnLetter(colIndex + tableColumnOffset)
+
+  // Look up by column key, header, and known aliases (case/punctuation-insensitive)
+  let value = getRowValue(row, column)
 
   // Fallback matching logic for common column keys
   if (value === undefined || value === null || value === '') {
@@ -295,7 +378,7 @@ const rawCellValue = (
     } else if (header === 'area' || colKey === 'area') {
       value = extractFieldValue(row.values, row, ['area', 'Area', 'AREA'])
     } else if (header.includes('no of store') || colKey === 'noOfStore' || colKey === 'no_of_store') {
-      value = extractFieldValue(row.values, row, ['noOfStore', 'no_of_store', 'noOfStore', 'NO OF STORE'])
+      value = extractFieldValue(row.values, row, ['noOfStore', 'no_of_store', 'NO OF STORE'])
     } else if (header.includes('price per store') || colKey === 'pricePerStore' || colKey === 'price_per_store') {
       value = extractFieldValue(row.values, row, ['pricePerStore', 'price_per_store', 'PRICE PER STORE'])
     } else if (header.includes('total amount') || colKey === 'totalAmount' || colKey === 'total_amount') {
@@ -314,15 +397,12 @@ const rawCellValue = (
     return Number(value)
   }
 
-  if (column?.serviceMeta) {
-    return value === true || value === 'true' || value === 'X' ? 'X' : ''
+  // Service / checkbox columns (NEW STORE, RENOVATION, ...): checked -> "X", unchecked -> blank
+  if (isServiceColumn || column?.serviceMeta) {
+    return isTruthyFlag(value) ? 'X' : ''
   }
 
-  if (typeof value === 'string' && value.trim().startsWith('=')) {
-    return { formula: value.trim().slice(1) }
-  }
-
-  // Formula generation for Parts Subtotal
+  // Formula generation for Parts Subtotal (PARTS QTY * PRICE)
   if (header === 'subtotal' || colKey === 'subtotal' || colKey === 'subTotal') {
     const partsQtyColIndex = columns.findIndex(
       (col) => /parts\s*qty/i.test(String(col.header || '')) || col.key === 'parts_qty' || col.key === 'partsQty',
@@ -331,15 +411,18 @@ const rawCellValue = (
       (col) => /^price$/i.test(String(col.header || '')) || col.key === 'price' || col.key === 'unitPrice',
     )
 
-    // Skip formula generation in bulk export to avoid circular references
-    if (!isBulkExport && partsQtyColIndex !== -1 && priceColIndex !== -1 && columnIndex !== partsQtyColIndex && columnIndex !== priceColIndex) {
-      const partsQtyColLetter = getColumnLetter(partsQtyColIndex + 1 + tableColumnOffset)
-      const priceColLetter = getColumnLetter(priceColIndex + 1 + tableColumnOffset)
-      const numResult = parseNumericValue(value)
+    if (
+      partsQtyColIndex !== -1 &&
+      priceColIndex !== -1 &&
+      columnIndex !== partsQtyColIndex &&
+      columnIndex !== priceColIndex
+    ) {
+      const qtyRef = `${letterFor(partsQtyColIndex)}${excelRowNumber}`
+      const priceRef = `${letterFor(priceColIndex)}${excelRowNumber}`
 
       return {
-        formula: `IF(OR(${partsQtyColLetter}${excelRowNumber}="",${priceColLetter}${excelRowNumber}=""),0,${partsQtyColLetter}${excelRowNumber}*${priceColLetter}${excelRowNumber})`,
-        result: numResult,
+        formula: `IF(OR(${qtyRef}="",${priceRef}=""),0,${qtyRef}*${priceRef})`,
+        result: parseNumericValue(value),
       }
     }
   }
@@ -353,15 +436,47 @@ const rawCellValue = (
       (col) => /price\s*per\s*store/i.test(String(col.header || '')) || col.key === 'pricePerStore' || col.key === 'price_per_store',
     )
 
-    // Skip formula generation in bulk export to avoid circular references
-    if (!isBulkExport && noOfStoreColIndex !== -1 && pricePerStoreColIndex !== -1 && columnIndex !== noOfStoreColIndex && columnIndex !== pricePerStoreColIndex) {
-      const noOfStoreColLetter = getColumnLetter(noOfStoreColIndex + 1 + tableColumnOffset)
-      const pricePerStoreColLetter = getColumnLetter(pricePerStoreColIndex + 1 + tableColumnOffset)
-      const numResult = parseNumericValue(value)
+    if (
+      noOfStoreColIndex !== -1 &&
+      pricePerStoreColIndex !== -1 &&
+      columnIndex !== noOfStoreColIndex &&
+      columnIndex !== pricePerStoreColIndex
+    ) {
+      const storeRef = `${letterFor(noOfStoreColIndex)}${excelRowNumber}`
+      const priceRef = `${letterFor(pricePerStoreColIndex)}${excelRowNumber}`
 
       return {
-        formula: `IF(OR(${noOfStoreColLetter}${excelRowNumber}="",${pricePerStoreColLetter}${excelRowNumber}=""),0,${noOfStoreColLetter}${excelRowNumber}*${pricePerStoreColLetter}${excelRowNumber})`,
-        result: numResult,
+        formula: `IF(OR(${storeRef}="",${priceRef}=""),0,${storeRef}*${priceRef})`,
+        result: parseNumericValue(value),
+      }
+    }
+  }
+
+  // Formula generation for Service TOTAL SALES (SALES + ADDITIONAL SALES (MOBILIZATION))
+  if (
+    header.includes('total sales') ||
+    colKey === 'totalSales' ||
+    colKey === 'total_sales'
+  ) {
+    const salesColIndex = columns.findIndex(
+      (col) => /^sales$/i.test(String(col.header || '').trim()) || col.key === 'sales',
+    )
+    const additionalSalesColIndex = columns.findIndex(
+      (col) => /additional\s*sales/i.test(String(col.header || '')) || col.key === 'additionalSales' || col.key === 'additional_sales',
+    )
+
+    if (
+      salesColIndex !== -1 &&
+      additionalSalesColIndex !== -1 &&
+      columnIndex !== salesColIndex &&
+      columnIndex !== additionalSalesColIndex
+    ) {
+      const salesRef = `${letterFor(salesColIndex)}${excelRowNumber}`
+      const additionalRef = `${letterFor(additionalSalesColIndex)}${excelRowNumber}`
+
+      return {
+        formula: `IF(OR(${salesRef}="",${additionalRef}=""),0,${salesRef}+${additionalRef})`,
+        result: parseNumericValue(value),
       }
     }
   }
@@ -385,6 +500,12 @@ const styleCell = (
   if (number) cell.numFmt = '#,##0.00'
 }
 
+// True if a formula text references the given cell address (e.g. "F12") as a standalone reference
+const formulaReferencesCell = (formula, address) => {
+  const pattern = new RegExp(`(^|[^A-Za-z0-9_$])\\$?${address.replace(/\d+$/, '')}\\$?${address.match(/\d+$/)[0]}(?![0-9])`, 'i')
+  return pattern.test(formula)
+}
+
 // Helper function to build a worksheet (used for both single and bulk export)
 const buildWorksheetContent = async ({
   workbook,
@@ -404,6 +525,22 @@ const buildWorksheetContent = async ({
   const lastColumnLetter = worksheet.getColumn(colCount).letter
   const secondLastColumnLetter = worksheet.getColumn(colCount - 1).letter
   const expandedRows = processRowsForExport(rows)
+  const sheetName = worksheet.name // Get sheet name for scoped formulas
+
+  // Detect service (checkbox) columns: flagged by serviceMeta, named like a known service,
+  // or holding true/false values in any row
+  const serviceColumnIndexes = new Set()
+  columns.forEach((column, index) => {
+    if (isRowNumberColumn(column)) return
+    const header = String(column.header || '').trim()
+    if (
+      column?.serviceMeta ||
+      SERVICE_HEADER_PATTERN.test(header) ||
+      expandedRows.some((r) => isBooleanLike(getRowValue(r, column)))
+    ) {
+      serviceColumnIndexes.add(index)
+    }
+  })
 
   worksheet.columns = new Array(colCount).fill(null).map(() => ({ width: 18 }))
 
@@ -440,7 +577,7 @@ const buildWorksheetContent = async ({
         // Position logo with absolute dimensions to maintain actual size
         worksheet.addImage(imageId, {
           tl: { col: 0.2, row: 0.8 },
-          ext: { width: 100, height: 70 }
+          ext: { width: 100, height: 70 },
         })
       } catch (error) {
         // Ignore image placement errors
@@ -559,7 +696,7 @@ const buildWorksheetContent = async ({
         return
       }
 
-      const value = rawCellValue(
+      let value = rawCellValue(
         row,
         column,
         rowIndex,
@@ -568,7 +705,30 @@ const buildWorksheetContent = async ({
         tableColumnOffset,
         currentRowNumber,
         isBulkExport,
+        sheetName,
+        serviceColumnIndexes.has(columnIndex),
       )
+
+      // Handle row numbers - display as integer without decimal formatting
+      if (value && value.isRowNumber) {
+        cell.value = value.value
+        cell.numFmt = '0' // Integer format
+        styleCell(cell, { align: 'center', fontSize: 10 })
+        return
+      }
+
+      // SAFETY GUARD: never write a formula that references its own cell.
+      // If that ever happens, fall back to the plain computed value instead of
+      // triggering Excel's "circular reference" warning.
+      if (value && typeof value === 'object' && value.formula !== undefined) {
+        const ownAddress = `${getColumnLetter(columnIndex + tableColumnOffset)}${currentRowNumber}`
+        if (formulaReferencesCell(value.formula, ownAddress)) {
+          console.warn(
+            `Skipped self-referencing formula in ${ownAddress}: ${value.formula}`,
+          )
+          value = value.result
+        }
+      }
 
       cell.value =
         value && typeof value === 'object' && value.formula !== undefined
@@ -590,7 +750,7 @@ const buildWorksheetContent = async ({
 
       if (row.isMainRow && row.rowSpan && row.rowSpan > 1) {
         if (!['parts_description', 'parts_qty', 'price', 'subtotal'].includes(column.key)) {
-          const colLetter = getColumnLetter(columnIndex + 1 + tableColumnOffset)
+          const colLetter = getColumnLetter(columnIndex + tableColumnOffset)
           mergeTracker.push({
             range: `${colLetter}${currentRowNumber}:${colLetter}${currentRowNumber + row.rowSpan - 1}`,
           })
@@ -640,28 +800,30 @@ const buildWorksheetContent = async ({
     const labelCell = worksheet.getCell(`${labelColumnLetter}${rowNumber}`)
     const valueCell = worksheet.getCell(`${valueColumnLetter}${rowNumber}`)
     labelCell.value = label
-    // In bulk export, use static values instead of formulas to avoid circular references
-    if (isBulkExport) {
-      valueCell.value = parseNumericValue(result)
-    } else {
+
+    // Use formula if provided, otherwise use computed value
+    if (formula) {
       valueCell.value = { formula, result: parseNumericValue(result) }
+    } else {
+      valueCell.value = parseNumericValue(result)
     }
     styleCell(labelCell, { bold, align: 'left', fontSize: 10 })
     styleCell(valueCell, { bold, number: true, align: 'right', fontSize: 10 })
   }
 
+  // Totals reference the data range only (rows above the totals), never their own cells
   writeTotalRow(subtotalRow, 'TOTAL SALES:', `SUM(${sumRange})`, computedSubtotal, true)
   writeTotalRow(
     vatRow,
     '12% VAT:',
-    `ROUND(${valueColumnLetter}${subtotalRow}*0.12, 2)`,
+    `ROUND(SUM(${sumRange})*0.12, 2)`,
     computedVat,
     true,
   )
   writeTotalRow(
     totalRow,
     'TOTAL PROJECT COST:',
-    `${valueColumnLetter}${subtotalRow}+${valueColumnLetter}${vatRow}`,
+    `SUM(${sumRange})*1.12`,
     computedTotal,
     true,
   )
@@ -669,7 +831,7 @@ const buildWorksheetContent = async ({
   worksheet.getRow(titleRow).height = 24
   worksheet.getRow(tableHeaderRow).height = 36
 
-  // Signatures Section
+  // Signatures Section (these indexes are 1-based, hence the "- 1" below)
   const signatureLabelRow = totalRow + 3
   const signatureLineRow = signatureLabelRow + 2
 
@@ -742,24 +904,35 @@ export const exportStatementToExcel = async ({
 }) => {
   const workbookInstance = workbook || new ExcelJS.Workbook()
   const isBulkExport = workbook !== null // Detect bulk export mode
-  // Sanitize sheet name (Excel has restrictions on sheet names)
-  const sanitizedSheetName = sheetName
-    .replace(/[\\/?*[\]]/g, '_') // Remove invalid characters
-    .substring(0, 31) // Max 31 characters
-    .replace(/^\\$/g, '') // Don't start with backslash
-    .trim() || 'SOA'
 
-  console.log(`Adding worksheet with name: "${sanitizedSheetName}"`)
+  // Sanitize sheet name (Excel has restrictions on sheet names)
+  // Invalid characters: \ / ? * [ ] :
+  // Cannot be empty, cannot exceed 31 characters
+  // Cannot start or end with single quote
+  let sanitizedSheetName = sheetName
+    .replace(/[\\/?*[\]:]/g, '_') // Remove invalid characters
+    .replace(/^'/g, '') // Don't start with single quote
+    .replace(/'$/g, '') // Don't end with single quote
+    .trim()
+    .substring(0, 31) // Max 31 characters
+
+  // Ensure it's not empty and doesn't start with a number
+  if (!sanitizedSheetName || /^\d/.test(sanitizedSheetName)) {
+    sanitizedSheetName = `Sheet_${sanitizedSheetName || Math.floor(Math.random() * 1000)}`
+  }
 
   const worksheet = workbookInstance.addWorksheet(sanitizedSheetName)
   worksheet.views = [{ state: 'normal', showGridLines: true }]
 
   // Cache image ID for bulk export (only add logo once to workbook)
+  // Skip logo in bulk export to avoid corruption issues
   let imageId = cachedImageId
-  if (!imageId && !workbook && !skipLogo) {
+  const shouldSkipLogo = skipLogo || isBulkExport
+  if (!imageId && !workbook && !shouldSkipLogo) {
     try {
       imageId = workbookInstance.addImage({ base64: await toDataUrl(logo), extension: 'png' })
     } catch (error) {
+      console.error('Failed to add logo:', error)
       // Ignore logo errors
     }
   }
@@ -773,7 +946,7 @@ export const exportStatementToExcel = async ({
     statementId,
     totals,
     cachedImageId: imageId,
-    skipLogo,
+    skipLogo: shouldSkipLogo,
     isBulkExport,
   })
 

@@ -651,21 +651,9 @@ export default function Statement() {
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
 
-      // Add logo to workbook once and cache the image ID for reuse
-      let cachedImageId = null
-      try {
-        const logoResponse = await fetch(new URL('../../../assets/logo.png', import.meta.url))
-        const logoBlob = await logoResponse.blob()
-        const logoDataUrl = await new Promise((resolve) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result)
-          reader.readAsDataURL(logoBlob)
-        })
-        cachedImageId = workbook.addImage({ base64: logoDataUrl, extension: 'png' })
-        console.log('Logo added to workbook with ID:', cachedImageId)
-      } catch (error) {
-        console.error('Failed to add logo to workbook:', error)
-      }
+      // Skip logo in bulk export to avoid corruption issues
+      // The export function will automatically skip logos in bulk mode
+      const cachedImageId = null
 
       // Process each statement independently
       const sheetNameTracker = new Set() // Track used sheet names to avoid duplicates
@@ -766,8 +754,7 @@ export default function Statement() {
             totals,
             workbook, // Pass the workbook to add sheet
             sheetName: uniqueSheetName,
-            cachedImageId, // Pass cached logo image ID
-            skipLogo: false, // Don't skip logo - we're using cached image
+            cachedImageId, // Pass cached logo image ID (will be skipped internally for bulk export)
             maintenanceFormat: statement.maintenance_format, // Pass maintenance format
           })
 
