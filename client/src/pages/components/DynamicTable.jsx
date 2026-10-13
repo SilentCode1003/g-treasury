@@ -1,5 +1,36 @@
 import React, { useState, useMemo } from 'react'
 
+/**
+ * Column config:
+ * {
+ *   header: 'Title',
+ *   key: 'title',
+ *   align: 'left' | 'center' | 'right',
+ *   overflow: 'wrap' | 'clamp' | 'truncate',  // NEW - how long text is handled (default: 'wrap')
+ *   maxWidth: '20rem',                        // NEW - optional max width of the cell text
+ *   noWrap: true,                          // NEW - keep on one line (auto-on for id/date/total/amount keys)
+ *   minWidth: '18rem',                        // NEW - optional min column width (good for Title)
+ *   lines: 2,                                 // NEW - used when overflow === 'clamp'
+ *   render: (row) => <JSX />,                 // optional custom renderer (bypasses overflow handling)
+ * }
+ */
+
+// Tailwind needs full class names to exist in the source, so map line counts explicitly
+const CLAMP_CLASSES = {
+  1: 'line-clamp-1',
+  2: 'line-clamp-2',
+  3: 'line-clamp-3',
+  4: 'line-clamp-4',
+}
+
+// Forces every nested element inside a cell to wrap instead of truncating, even when a
+// column's custom `render` uses `truncate`, `text-ellipsis`, `max-w-*` or `line-clamp-*`.
+const WRAP_OVERRIDE =
+  '[&_*]:!whitespace-normal [&_*]:!overflow-visible [&_*]:![text-overflow:clip] [&_*]:!max-w-none [&_*]:![-webkit-line-clamp:unset] [&_*]:!break-words'
+
+// Actions column: fixed width, always visible (no hide/show animation)
+const ACTIONS_STYLE = { width: '120px', minWidth: '120px', maxWidth: '120px' }
+
 export default function DynamicTable({
   data = [],
   searchFields = [], // Optional keys array. If empty, code will dynamically search all columns
@@ -11,8 +42,13 @@ export default function DynamicTable({
   selectedRowId = null,
   onRowHover = null,
   onRowLeave = null,
-  showActionsColumn = true,
+  wrapCells = true, // true: long text expands the row height instead of showing "..."
 }) {
+  // Short, fixed-format columns (dates, totals, ids) should never wrap onto a second line.
+  // Set `noWrap: true/false` on a column to override this guess.
+  const isNoWrap = (col) =>
+    col.noWrap !== undefined ? col.noWrap : /(^id$|date|total|amount)/i.test(col.key || '')
+
   // Local states managing user interface controls
   const [localSearchQuery, setLocalSearchQuery] = useState('')
   const [selectedColumnKey, setSelectedColumnKey] = useState('All')
@@ -61,6 +97,43 @@ export default function DynamicTable({
     }
 
     return text
+  }
+
+  // Wraps the default cell output so long text is handled per column config,
+  // and the full value is always available as a hover tooltip.
+  const renderDefaultCell = (col, row) => {
+    const rawValue = row[col.key]
+    const content = renderCellValue(rawValue)
+
+    // Badges / non-text output (e.g. Active / Inactive pills) are returned as-is
+    if (typeof content !== 'string') return content
+
+    const overflow = col.overflow || 'wrap'
+    const style = col.maxWidth ? { maxWidth: col.maxWidth } : undefined
+
+    if (overflow === 'truncate') {
+      return (
+        <span title={content} className="block truncate" style={{ maxWidth: col.maxWidth || '20rem' }}>
+          {content}
+        </span>
+      )
+    }
+
+    if (overflow === 'clamp') {
+      const clampClass = CLAMP_CLASSES[col.lines] || CLAMP_CLASSES[2]
+      return (
+        <span title={content} className={`block break-words ${clampClass}`} style={style}>
+          {content}
+        </span>
+      )
+    }
+
+    // 'wrap' (default): show the whole text, wrapping onto as many lines as needed
+    return (
+      <span title={content} className="block whitespace-normal break-words" style={style}>
+        {content}
+      </span>
+    )
   }
 
   // 2. Refined Calculation Loop filtering table datasets matching both selection options
@@ -114,7 +187,7 @@ export default function DynamicTable({
           </p>
         </div>
 
-        {/* 🛠️ Modern Filtration Control Panel Block (Fixed Contrast/Readability) */}
+        {/* Modern Filtration Control Panel Block (Fixed Contrast/Readability) */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {/* White High-Contrast Text Input Search Bar */}
           <input
@@ -159,7 +232,7 @@ export default function DynamicTable({
         </div>
       </div>
 
-      {/* Table Container 
+      {/* Table Container
         - Mobile: Natural vertical fluid layout, horizontal side-scroll enabled
         - Desktop (lg): Fixed locked bounding box, inside vertical row scrolling
       */}
@@ -170,12 +243,14 @@ export default function DynamicTable({
               {columns.map((col, idx) => (
                 <th
                   key={idx}
-                  className={`sticky top-0 z-10 bg-red-600 px-6 py-3 transition-all duration-300 ease-in-out ${col.key === 'actions' && !showActionsColumn ? 'w-0 opacity-0 overflow-hidden p-0' : ''} ${col.key === 'actions' && showActionsColumn ? 'opacity-100' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
-                  style={col.key === 'actions' ? { 
-                    width: showActionsColumn ? '120px' : '0px',
-                    minWidth: showActionsColumn ? '120px' : '0px',
-                    maxWidth: showActionsColumn ? '120px' : '0px'
-                  } : {}}
+                  className={`sticky top-0 z-10 bg-red-600 px-6 py-3 whitespace-nowrap ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                  style={
+                    col.key === 'actions'
+                      ? ACTIONS_STYLE
+                      : col.minWidth
+                        ? { minWidth: col.minWidth }
+                        : {}
+                  }
                 >
                   {col.header}
                 </th>
@@ -203,15 +278,17 @@ export default function DynamicTable({
                   {columns.map((col, colIdx) => (
                     <td
                       key={colIdx}
-                      className={`px-6 py-3.5 whitespace-nowrap transition-all duration-300 ease-in-out ${col.key === 'actions' && !showActionsColumn ? 'w-0 opacity-0 overflow-hidden p-0' : ''} ${col.key === 'actions' && showActionsColumn ? 'opacity-100' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
-                      style={col.key === 'actions' ? { 
-                        width: showActionsColumn ? '120px' : '0px',
-                        minWidth: showActionsColumn ? '120px' : '0px',
-                        maxWidth: showActionsColumn ? '120px' : '0px'
-                      } : {}}
+                      className={`px-6 py-3.5 whitespace-normal align-middle ${col.key === 'actions' ? '' : isNoWrap(col) ? '!whitespace-nowrap' : wrapCells ? WRAP_OVERRIDE : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                      style={
+                        col.key === 'actions'
+                          ? ACTIONS_STYLE
+                          : col.minWidth
+                            ? { minWidth: col.minWidth }
+                            : {}
+                      }
                     >
                       {/* Execute custom render functions per column context block */}
-                      {col.render ? col.render(row) : renderCellValue(row[col.key])}
+                      {col.render ? col.render(row) : renderDefaultCell(col, row)}
                     </td>
                   ))}
                 </tr>
@@ -238,3 +315,41 @@ export default function DynamicTable({
     </div>
   )
 }
+
+/* ------------------------------------------------------------------
+ * Example usage (put this in the page that renders the table)
+ *
+ * IMPORTANT: your Title column currently has a custom `render` with a
+ * `truncate` class. That is what produces the "..." in your screenshot.
+ * Either delete `render` so the new `overflow` option takes over (A),
+ * or edit the render itself (B).
+ *
+ * const columns = [
+ *   { header: 'ID', key: 'id', align: 'center' },
+ *
+ *   // A) Full text, wraps onto multiple lines (no dots)
+ *   { header: 'Title', key: 'title', align: 'left', overflow: 'wrap', maxWidth: '24rem' },
+ *
+ *   // A2) Max 2 lines, then dots, full text on hover
+ *   // { header: 'Title', key: 'title', align: 'left', overflow: 'clamp', lines: 2, maxWidth: '24rem' },
+ *
+ *   // B) Custom render with wrapping instead of truncate
+ *   // {
+ *   //   header: 'Title',
+ *   //   key: 'title',
+ *   //   align: 'left',
+ *   //   render: (row) => (
+ *   //     <span title={row.title} className="block max-w-sm whitespace-normal break-words font-bold text-gray-900">
+ *   //       {row.title}
+ *   //     </span>
+ *   //   ),
+ *   // },
+ *
+ *   { header: 'Company From', key: 'companyFrom', align: 'left', overflow: 'truncate' },
+ *   { header: 'Company To', key: 'companyTo', align: 'left', overflow: 'truncate' },
+ *   { header: 'Date', key: 'date', align: 'left' },
+ *   { header: 'Prepared By', key: 'preparedBy', align: 'left' },
+ *   { header: 'Total', key: 'total', align: 'right' },
+ *   { header: 'Actions', key: 'actions', align: 'center', render: (row) => <ActionButtons row={row} /> },
+ * ]
+ * ------------------------------------------------------------------ */

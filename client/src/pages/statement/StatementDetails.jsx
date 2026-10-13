@@ -12,7 +12,7 @@ import Layout from '../components/Layout'
 import DynamicToast from '../components/DynamicToast'
 import LoadingScreen from '../LoadingScreen'
 import { apiClient } from '../../api/axios'
-
+import { createPortal } from 'react-dom'
 import {
   formatDateLabel,
   formatCurrency,
@@ -150,6 +150,142 @@ const determineStatementTypeFromHeaders = (headers) => {
 }
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ONLY CHANGE NEEDED IN YOUR IMPORTS (top of your file):
+//   import { createPortal } from 'react-dom'
+// Everything else below replaces your existing StatementDetailTable code.
+// Every change is marked with  // FIX
+// ─────────────────────────────────────────────────────────────────────────────
+
+// FIX: dropdown panel rendered in <body> with position: fixed, so it is never clipped by the
+// table's scroll container and always sits above it. Place it where the old absolute dropdown
+// <div> was (inside the `relative` wrapper of the input - that wrapper is used as the anchor).
+const FloatingMenu = ({
+  children,
+  className = '',
+  width = 320,
+  maxHeight = 208,
+  style,
+  onMouseDown,
+  ...rest
+}) => {
+  const GAP = 4
+  const EDGE = 8
+  const FLIP_BELOW = 160
+  const markerRef = React.useRef(null)
+  const [box, setBox] = React.useState(null)
+
+  const measure = React.useCallback(() => {
+    const anchor = markerRef.current?.parentElement
+    if (!anchor) return
+
+    const rect = anchor.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+
+    // Anchor scrolled completely out of view -> hide the menu
+    if (rect.bottom < 0 || rect.top > vh) {
+      setBox(null)
+      return
+    }
+
+    const desired = width === 'anchor' ? rect.width : width
+    const w = Math.min(desired, vw * 0.9)
+    const left = Math.max(EDGE, Math.min(rect.left, vw - w - EDGE))
+
+    // Open upwards when there is not enough room below the input
+    const below = vh - rect.bottom - GAP - EDGE
+    const above = rect.top - GAP - EDGE
+    const openUp = below < Math.min(maxHeight, FLIP_BELOW) && above > below
+    const available = openUp ? above : below
+
+    const next = {
+      left,
+      width: w,
+      maxHeight: Math.max(80, Math.min(maxHeight, available)),
+      ...(openUp ? { bottom: vh - rect.top + GAP } : { top: rect.bottom + GAP }),
+    }
+
+    setBox((prev) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
+  }, [width, maxHeight])
+
+  // Re-measure after every render (cheap, bails out when nothing moved)
+  React.useLayoutEffect(() => {
+    measure()
+  })
+
+  // Follow the input while the table / page scrolls or the window resizes
+  React.useLayoutEffect(() => {
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true) // capture: catches inner scroll containers
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [measure])
+
+  return (
+    <>
+      <span ref={markerRef} className="hidden" aria-hidden="true" />
+      {box &&
+        createPortal(
+          <div
+            {...rest}
+            className={`fixed z-[9999] ${className}`}
+            style={{
+              ...style,
+              left: box.left,
+              top: box.top,
+              bottom: box.bottom,
+              width: box.width,
+              maxHeight: box.maxHeight,
+            }}
+            // Keep focus in the input while the user clicks / scrolls inside the menu
+            onMouseDown={(e) => {
+              e.preventDefault()
+              onMouseDown?.(e)
+            }}
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
+    </>
+  )
+}
+
+// FIX: explicit column widths so narrow data (numbers, dates, checkboxes) no longer gets a huge
+// share of the table, and text columns (store name, parts description, area) get the room instead.
+// Values are in rem. Adjust any number below to taste.
+const getColumnWidth = (col) => {
+  const header = String(
+    typeof col.header === 'object' ? col.header?.header || col.header?.key || '' : col.header || '',
+  ).toUpperCase()
+
+  if (isRowNumberColumn(col)) return '3.5rem'
+  if (isQuantityColumn(col)) return '5.5rem'
+  if (col.serviceMeta) return '7rem' // checkbox columns (NEW STORE, RENOVATION, ...)
+  if (isDateColumn(col)) return '10rem'
+  if (isStoreNumberColumn(col)) return '7rem'
+  if (isStoreNameColumn(col)) return '16rem'
+  if (header === 'AREA') return '12rem'
+  if (header === 'PARTS DESCRIPTION') return '16rem'
+  if (header === 'PARTS QTY.') return '5.5rem'
+  if (header === 'PRICE') return '7.5rem'
+  if (header === 'SUBTOTAL') return '9rem'
+  if (header === 'TOTAL INVOICE AMOUNT') return '9rem'
+  if (/^(DR|RT) NO/.test(header)) return '6.5rem'
+  if (col.key === 'vat') return '7.5rem'
+  if (
+    isSalesColumn(col) ||
+    isAdditionalSalesColumn(col) ||
+    isMaterialCostColumn(col) ||
+    isTotalSalesColumn(col) ||
+    isNumericColumn(col)
+  )
+    return '8.5rem'
+  return '11rem' // any other text column
+}
 
 const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   {
@@ -584,7 +720,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const [addPartRowHiding, setAddPartRowHiding] = useState(null)
   const [qtyPanelOpen, setQtyPanelOpen] = useState(false)
   const [stores, setStores] = useState([])
-  const [activeStoreDropdown, setActiveStoreDropdown] = useState({ rowId: null, fieldKey: null })
+  const [activeStoreDropdown, setActiveStoreDropdown] = useState(null) // FIX: was an object, ids are strings
   const [focusedNumericField, setFocusedNumericField] = useState(null)
   const [computedTotals, setComputedTotals] = useState({ subTotal: 0, vat: 0, total: 0 })
   const [sortColumn, setSortColumn] = useState(null)
@@ -593,6 +729,27 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
   const storeDropdownBlurTimer = useRef(null)
   const qtyPanelCloseTimer = useRef(null)
   const addPartRowTimer = useRef(null)
+
+  // FIX: one shared close-timer for ALL dropdowns (store / area / parts).
+  // Opening any dropdown cancels a pending close, so the blur of the previously focused
+  // field can no longer close the dropdown you just opened (that was the "opens then
+  // instantly hides" bug). Only one dropdown is open at a time.
+  const dropdownCloseTimer = useRef(null)
+  const openDropdown = (kind, id) => {
+    clearTimeout(dropdownCloseTimer.current)
+    setActiveStoreDropdown(kind === 'store' ? id : null)
+    setActiveAreaDropdown(kind === 'area' ? id : null)
+    setActivePartsDropdown(kind === 'parts' ? id : null)
+  }
+  const closeDropdownSoon = () => {
+    clearTimeout(dropdownCloseTimer.current)
+    dropdownCloseTimer.current = setTimeout(() => {
+      setActiveStoreDropdown(null)
+      setActiveAreaDropdown(null)
+      setActivePartsDropdown(null)
+    }, 150)
+  }
+  useEffect(() => () => clearTimeout(dropdownCloseTimer.current), [])
 
   const clearAddPartRowTimer = () => {
     if (addPartRowTimer.current) {
@@ -733,7 +890,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       return updated
     })
     clearStoreDropdownBlurTimer()
-    setActiveStoreDropdown({ rowId: null, fieldKey: null })
+    setActiveStoreDropdown(null) // FIX
   }
 
   const storeSuggestions = (query) => {
@@ -807,7 +964,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       return updated
     })
     clearStoreDropdownBlurTimer()
-    setActiveStoreDropdown({ rowId: null, fieldKey: null })
+    setActiveStoreDropdown(null) // FIX
   }
 
   const uniqueColumnValues = useMemo(() => {
@@ -1392,13 +1549,14 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
       </div>
 
       <div className="overflow-x-auto lg:flex-1 lg:overflow-y-auto">
-        <table className="w-full text-center border-collapse relative">
+        <table className="w-full table-fixed text-center border-collapse relative">
           <thead>
             <tr className="border-b border-gray-100 bg-red-600 text-white text-[9px] font-bold uppercase tracking-widest">
               {columns.map((col, idx) => (
                 <th
                   key={col.key}
-                  className={`sticky top-0 z-10 bg-red-600 px-6 py-3 ${col.key === 'date' ? 'w-[6rem] px-3' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'} cursor-pointer hover:bg-red-700`}
+                  className={`sticky top-0 z-10 bg-red-600 px-3 py-3 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'} cursor-pointer hover:bg-red-700`}
+                  style={{ width: getColumnWidth(col) }}
                   onClick={() => handleSort(col.key)}
                 >
                   <div className="flex items-center gap-1">
@@ -1413,7 +1571,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                   </div>
                 </th>
               ))}
-              <th className="sticky top-0 z-10 bg-red-600 w-16 px-3 py-3">
+              <th className="sticky top-0 z-10 bg-red-600 px-3 py-3" style={{ width: '5.5rem' }}>
                 <span className="text-[9px] font-bold uppercase tracking-widest">Action</span>
               </th>
             </tr>
@@ -1522,18 +1680,21 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             value={currentValue}
                                             onChange={(e) => {
                                               handleCellChange(row.id, col.key, e.target.value)
-                                              setActiveAreaDropdown(row.id)
+                                              openDropdown('area', row.id) // FIX
                                             }}
-                                            onFocus={() => setActiveAreaDropdown(row.id)}
-                                            onBlur={() => {
-                                              setTimeout(() => setActiveAreaDropdown(null), 150)
-                                            }}
+                                            onFocus={() => openDropdown('area', row.id)} // FIX
+                                            onClick={() => openDropdown('area', row.id)} // FIX: re-open after picking
+                                            onBlur={closeDropdownSoon} // FIX
                                             className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                             placeholder="Search or type area"
                                           />
                                           {activeAreaDropdown === row.id &&
                                             filteredCities(currentValue).length > 0 && (
-                                              <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                                              <FloatingMenu
+                                                maxHeight={160}
+                                                width="anchor"
+                                                className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                              >
                                                 {filteredCities(currentValue).map((city) => (
                                                   <button
                                                     key={city}
@@ -1548,7 +1709,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                                     {city}
                                                   </button>
                                                 ))}
-                                              </div>
+                                              </FloatingMenu>
                                             )}
                                         </div>
                                       )
@@ -1565,26 +1726,24 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                               col.key,
                                               nextValue === '' ? 0 : Number(nextValue),
                                             )
-                                            setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                            openDropdown('store', `${row.id}-${col.key}`) // FIX
                                           }}
-                                          onFocus={() =>
-                                            setActiveStoreDropdown(`${row.id}-${col.key}`)
-                                          }
-                                          onBlur={() => {
-                                            setTimeout(() => setActiveStoreDropdown(null), 200)
-                                          }}
+                                          onFocus={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                          onClick={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                          onBlur={closeDropdownSoon} // FIX
                                           className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                           placeholder="Store no."
                                         />
                                         {activeStoreDropdown === `${row.id}-${col.key}` &&
                                           filteredStoresByNumber(currentValue).length > 0 && (
-                                            <div
-                                              className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                              onMouseDown={(e) => e.preventDefault()}
+                                            <FloatingMenu
+                                              maxHeight={208}
+                                              width={320}
+                                              className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                             >
                                               {filteredStoresByNumber(currentValue).map((store) => (
                                                 <button
-                                                  key={store.store_id}
+                                                  key={store.id} // FIX: was store.store_id (always undefined)
                                                   type="button"
                                                   onClick={(e) => {
                                                     e.preventDefault()
@@ -1611,7 +1770,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                                   {store.number} - {store.name}
                                                 </button>
                                               ))}
-                                            </div>
+                                            </FloatingMenu>
                                           )}
                                       </div>
                                     ) : isNameField ? (
@@ -1621,26 +1780,24 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                           value={currentValue}
                                           onChange={(e) => {
                                             handleCellChange(row.id, col.key, e.target.value)
-                                            setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                            openDropdown('store', `${row.id}-${col.key}`) // FIX
                                           }}
-                                          onFocus={() =>
-                                            setActiveStoreDropdown(`${row.id}-${col.key}`)
-                                          }
-                                          onBlur={() => {
-                                            setTimeout(() => setActiveStoreDropdown(null), 200)
-                                          }}
+                                          onFocus={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                          onClick={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                          onBlur={closeDropdownSoon} // FIX
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Store name"
                                         />
                                         {activeStoreDropdown === `${row.id}-${col.key}` &&
                                           filteredStoresByName(currentValue).length > 0 && (
-                                            <div
-                                              className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                              onMouseDown={(e) => e.preventDefault()}
+                                            <FloatingMenu
+                                              maxHeight={208}
+                                              width={320}
+                                              className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                             >
                                               {filteredStoresByName(currentValue).map((store) => (
                                                 <button
-                                                  key={store.store_id}
+                                                  key={store.id} // FIX
                                                   type="button"
                                                   onClick={(e) => {
                                                     e.preventDefault()
@@ -1670,7 +1827,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                                   </div>
                                                 </button>
                                               ))}
-                                            </div>
+                                            </FloatingMenu>
                                           )}
                                       </div>
                                     ) : isNumericField ? (
@@ -1773,22 +1930,20 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                               'partsDescription',
                                               e.target.value,
                                             )
-                                            setActivePartsDropdown(`${row.id}-${part.id}`)
+                                            openDropdown('parts', `${row.id}-${part.id}`) // FIX
                                           }}
-                                          onFocus={() =>
-                                            setActivePartsDropdown(`${row.id}-${part.id}`)
-                                          }
-                                          onBlur={() => {
-                                            setTimeout(() => setActivePartsDropdown(null), 200)
-                                          }}
+                                          onFocus={() => openDropdown('parts', `${row.id}-${part.id}`)} // FIX
+                                          onClick={() => openDropdown('parts', `${row.id}-${part.id}`)} // FIX
+                                          onBlur={closeDropdownSoon} // FIX
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Search or type part"
                                         />
                                         {activePartsDropdown === `${row.id}-${part.id}` &&
                                           filteredParts(partValue).length > 0 && (
-                                            <div
-                                              className="absolute left-0 top-full z-20 mt-1 max-h-32 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                              onMouseDown={(e) => e.preventDefault()}
+                                            <FloatingMenu
+                                              maxHeight={128}
+                                              width={320}
+                                              className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                             >
                                               {filteredParts(partValue).map((partData) => (
                                                 <button
@@ -1812,7 +1967,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                                   </div>
                                                 </button>
                                               ))}
-                                            </div>
+                                            </FloatingMenu>
                                           )}
                                       </div>
                                     )}
@@ -2067,24 +2222,24 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                         col.key,
                                         nextValue === '' ? 0 : Number(nextValue),
                                       )
-                                      setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                      openDropdown('store', `${row.id}-${col.key}`) // FIX
                                     }}
-                                    onFocus={() => setActiveStoreDropdown(`${row.id}-${col.key}`)}
-                                    onBlur={() => {
-                                      setTimeout(() => setActiveStoreDropdown(null), 200)
-                                    }}
+                                    onFocus={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                    onClick={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                    onBlur={closeDropdownSoon} // FIX
                                     className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                     placeholder="Store no."
                                   />
                                   {activeStoreDropdown === `${row.id}-${col.key}` &&
                                     filteredStoresByNumber(currentValue).length > 0 && (
-                                      <div
-                                        className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                        onMouseDown={(e) => e.preventDefault()}
+                                      <FloatingMenu
+                                        maxHeight={208}
+                                        width={320}
+                                        className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                       >
                                         {filteredStoresByNumber(currentValue).map((store) => (
                                           <button
-                                            key={store.store_id}
+                                            key={store.id} // FIX
                                             type="button"
                                             onClick={(e) => {
                                               e.preventDefault()
@@ -2111,7 +2266,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             {store.number} - {store.name}
                                           </button>
                                         ))}
-                                      </div>
+                                      </FloatingMenu>
                                     )}
                                 </div>
                               ) : isAreaField ? (
@@ -2133,18 +2288,21 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       value={currentValue}
                                       onChange={(e) => {
                                         handleCellChange(row.id, col.key, e.target.value)
-                                        setActiveAreaDropdown(row.id)
+                                        openDropdown('area', row.id) // FIX
                                       }}
-                                      onFocus={() => setActiveAreaDropdown(row.id)}
-                                      onBlur={() => {
-                                        setTimeout(() => setActiveAreaDropdown(null), 150)
-                                      }}
+                                      onFocus={() => openDropdown('area', row.id)} // FIX
+                                      onClick={() => openDropdown('area', row.id)} // FIX
+                                      onBlur={closeDropdownSoon} // FIX
                                       className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="Search or type area"
                                     />
                                     {activeAreaDropdown === row.id &&
                                       filteredCities(currentValue).length > 0 && (
-                                        <div className="absolute left-0 top-full z-20 mt-1 max-h-40 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                                        <FloatingMenu
+                                          maxHeight={160}
+                                          width="anchor"
+                                          className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                        >
                                           {filteredCities(currentValue).map((city) => (
                                             <button
                                               key={city}
@@ -2159,7 +2317,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                               {city}
                                             </button>
                                           ))}
-                                        </div>
+                                        </FloatingMenu>
                                       )}
                                   </div>
                                 )
@@ -2182,18 +2340,21 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                       value={currentValue}
                                       onChange={(e) => {
                                         handleCellChange(row.id, col.key, e.target.value)
-                                        setActivePartsDropdown(row.id)
+                                        openDropdown('parts', row.id) // FIX
                                       }}
-                                      onFocus={() => setActivePartsDropdown(row.id)}
-                                      onBlur={() => {
-                                        setTimeout(() => setActivePartsDropdown(null), 150)
-                                      }}
+                                      onFocus={() => openDropdown('parts', row.id)} // FIX
+                                      onClick={() => openDropdown('parts', row.id)} // FIX
+                                      onBlur={closeDropdownSoon} // FIX
                                       className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                       placeholder="Search or type part"
                                     />
                                     {activePartsDropdown === row.id &&
                                       filteredParts(currentValue).length > 0 && (
-                                        <div className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+                                        <FloatingMenu
+                                          maxHeight={208}
+                                          width={320}
+                                          className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
+                                        >
                                           {filteredParts(currentValue).map((part) => (
                                             <button
                                               key={part.part_id}
@@ -2251,7 +2412,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                               </div>
                                             </button>
                                           ))}
-                                        </div>
+                                        </FloatingMenu>
                                       )}
                                   </div>
                                 )
@@ -2371,24 +2532,24 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                     value={currentValue}
                                     onChange={(e) => {
                                       handleCellChange(row.id, col.key, e.target.value)
-                                      setActiveStoreDropdown(`${row.id}-${col.key}`)
+                                      openDropdown('store', `${row.id}-${col.key}`) // FIX
                                     }}
-                                    onFocus={() => setActiveStoreDropdown(`${row.id}-${col.key}`)}
-                                    onBlur={() => {
-                                      setTimeout(() => setActiveStoreDropdown(null), 200)
-                                    }}
+                                    onFocus={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                    onClick={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                    onBlur={closeDropdownSoon} // FIX
                                     className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                     placeholder="Store name"
                                   />
                                   {activeStoreDropdown === `${row.id}-${col.key}` &&
                                     filteredStoresByName(currentValue).length > 0 && (
-                                      <div
-                                        className="absolute left-0 top-full z-20 mt-1 max-h-52 w-80 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
-                                        onMouseDown={(e) => e.preventDefault()}
+                                      <FloatingMenu
+                                        maxHeight={208}
+                                        width={320}
+                                        className="overflow-y-auto rounded border border-gray-200 bg-white shadow-lg"
                                       >
                                         {filteredStoresByName(currentValue).map((store) => (
                                           <button
-                                            key={store.store_id}
+                                            key={store.id} // FIX
                                             type="button"
                                             onClick={(e) => {
                                               e.preventDefault()
@@ -2415,7 +2576,7 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             {store.number} - {store.name}
                                           </button>
                                         ))}
-                                      </div>
+                                      </FloatingMenu>
                                     )}
                                 </div>
                               ) : isNumericField ? (
@@ -4275,71 +4436,86 @@ export default function StatementDetails() {
               </button>
             </div>
           </div>
+        </div> 
+
+{/* ── BRAND MASTER DOCUMENT HEADER PANEL ──────────────────────────────── */}
+<div className="rounded border border-gray-200 bg-white px-4 py-3 shadow-xs lg:shrink-0">
+  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    
+    {/* Title & Icon Section - Constrained width so it doesn't push the metadata */}
+    <div className="flex items-center gap-3 shrink-0 lg:max-w-md">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-black text-white">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          />
+        </svg>
+      </div>
+      <div>
+        <h1 className="text-xs font-black uppercase tracking-wide text-black leading-snug">
+          {statement.soa_title || 'STATEMENT OF ACCOUNT'}
+        </h1>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-red-600 mt-0.5">
+          Cycle: {formatDateLabel(statement.soa_date)}
+        </p>
+      </div>
+    </div>
+
+    {/* Account Source/Destination Metadata Nodes - Expanded width for legibility */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] flex-1">
+      
+      {/* From Node */}
+      <div className="rounded bg-gray-50/80 border border-gray-100 p-2.5 flex flex-col justify-between">
+        <div className="flex items-center justify-between gap-2 mb-1 border-b border-gray-200/60 pb-1">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">From</span>
+          <span className="font-bold text-black text-[11px] leading-tight text-right">
+            {companyMap[statement.soa_company_from]?.name || statement.soa_company_from}
+          </span>
         </div>
-
-        {/* Brand Master Document Header Panel */}
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm lg:shrink-0">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-black text-white">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-black uppercase tracking-wider text-black">
-                  {statement.soa_title || 'STATEMENT OF ACCOUNT'}
-                </h1>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-red-600 mt-0.5">
-                  Statement Reference Cycle: {formatDateLabel(statement.soa_date)}
-                </p>
-              </div>
-            </div>
-
-            {/* Account Source/Destination Metadata Nodes */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded bg-gray-50/60 border border-gray-100 p-4">
-                <p className="text-[12px] font-bold tracking-widest text-gray-400">From:</p>
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
-                  <span className="font-bold text-black">
-                    {companyMap[statement.soa_company_from]?.name || statement.soa_company_from}
-                  </span>
-                  {companyMap[statement.soa_company_from]?.address && (
-                    <span>{companyMap[statement.soa_company_from].address}</span>
-                  )}
-                  {companyMap[statement.soa_company_from]?.mobile && (
-                    <span>Mobile: {companyMap[statement.soa_company_from].mobile}</span>
-                  )}
-                  {companyMap[statement.soa_company_from]?.phone && (
-                    <span>Phone: {companyMap[statement.soa_company_from].phone}</span>
-                  )}
-                </div>
-              </div>
-              <div className="rounded bg-gray-50/60 border border-gray-100 p-4">
-                <p className="text-[12px] font-bold tracking-widest text-gray-400">To:</p>
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
-                  <span className="font-bold text-black">
-                    {companyMap[statement.soa_company_to]?.name || statement.soa_company_to}
-                  </span>
-                  {companyMap[statement.soa_company_to]?.address && (
-                    <span>{companyMap[statement.soa_company_to].address}</span>
-                  )}
-                  {companyMap[statement.soa_company_to]?.mobile && (
-                    <span>Mobile: {companyMap[statement.soa_company_to].mobile}</span>
-                  )}
-                  {companyMap[statement.soa_company_to]?.phone && (
-                    <span>Phone: {companyMap[statement.soa_company_to].phone}</span>
-                  )}
-                </div>
-              </div>
-            </div>
+        <div className="text-[10px] text-gray-500 leading-normal space-y-0.5">
+          {companyMap[statement.soa_company_from]?.address && (
+            <p className="line-clamp-2">{companyMap[statement.soa_company_from].address}</p>
+          )}
+          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-400">
+            {companyMap[statement.soa_company_from]?.mobile && (
+              <span>Mobile: {companyMap[statement.soa_company_from].mobile}</span>
+            )}
+            {companyMap[statement.soa_company_from]?.phone && (
+              <span>Phone: {companyMap[statement.soa_company_from].phone}</span>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* To Node */}
+      <div className="rounded bg-gray-50/80 border border-gray-100 p-2.5 flex flex-col justify-between">
+        <div className="flex items-center justify-between gap-2 mb-1 border-b border-gray-200/60 pb-1">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">To</span>
+          <span className="font-bold text-black text-[11px] leading-tight text-right">
+            {companyMap[statement.soa_company_to]?.name || statement.soa_company_to}
+          </span>
+        </div>
+        <div className="text-[10px] text-gray-500 leading-normal space-y-0.5">
+          {companyMap[statement.soa_company_to]?.address && (
+            <p className="line-clamp-2">{companyMap[statement.soa_company_to].address}</p>
+          )}
+          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-400">
+            {companyMap[statement.soa_company_to]?.mobile && (
+              <span>Mobile: {companyMap[statement.soa_company_to].mobile}</span>
+            )}
+            {companyMap[statement.soa_company_to]?.phone && (
+              <span>Phone: {companyMap[statement.soa_company_to].phone}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
         {/* Dynamic Table Ingestion Section */}
         {visibleTableColumns.length > 0 ? (
