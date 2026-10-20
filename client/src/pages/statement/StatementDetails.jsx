@@ -1545,6 +1545,14 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
               ))}
             </select>
           )}
+
+          <button
+            type="button"
+            onClick={handleAddRow}
+            className="inline-flex items-center rounded border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-red-700 transition-colors hover:bg-red-100"
+          >
+            + Add Row
+          </button>
         </div>
       </div>
 
@@ -2756,19 +2764,6 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                 </td>
               </tr>
             )}
-            <tr>
-              <td colSpan={columns.length + 1} className="px-6 py-3">
-                <div className="flex justify-center">
-                  <button
-                    type="button"
-                    onClick={handleAddRow}
-                    className="inline-flex items-center rounded border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-red-700 transition-colors hover:bg-red-100"
-                  >
-                    + Add Row
-                  </button>
-                </div>
-              </td>
-            </tr>
           </tbody>
         </table>
       </div>
