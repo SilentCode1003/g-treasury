@@ -38,7 +38,6 @@ const checkMigrations = async (label, migrationPath) => {
     })),
   ]
 
-  console.log(`\n📂 Migration Status: ${label}`)
   console.table(allMigrations)
   await sequelize.close()
 }
@@ -57,7 +56,7 @@ const checkMigrations = async (label, migrationPath) => {
     })
 
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`)
-    console.log(`✅ Database '${dbName}' created.`)
+
 
     await connection.end()
 

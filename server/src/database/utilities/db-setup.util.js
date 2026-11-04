@@ -26,9 +26,7 @@ require('dotenv').config()
 
     if (rows.length === 0) {
       await connection.query(`CREATE DATABASE \`${dbName}\`;`)
-      console.log(`✅ Database '${dbName}' created.`)
     } else {
-      console.log(`ℹ️  Database '${dbName}' already exists.`)
     }
 
     await connection.end()

@@ -3483,7 +3483,6 @@ export default function StatementDetails() {
   // Auto-save functionality
   const triggerAutoSave = useCallback(
     (currentRows, currentColumns) => {
-      console.log('Auto-save triggered', { currentRows, currentColumns })
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current)
       }
@@ -3521,7 +3520,6 @@ export default function StatementDetails() {
           // Update liveMeta with the calculated totals
           setLiveMeta({ subTotal, vat, total })
 
-          console.log('Auto-save executing', { rowsToSave, columnsToSave, subTotal, vat, total })
           if (rowsToSave.length > 0 && columnsToSave.length > 0) {
             await handleSaveRows(
               rowsToSave,
@@ -3535,7 +3533,6 @@ export default function StatementDetails() {
               },
               true,
             ) // isAutoSave = true for silent save
-            console.log('Auto-save completed successfully')
           }
         } catch (err) {
           console.error('Auto-save failed:', err)

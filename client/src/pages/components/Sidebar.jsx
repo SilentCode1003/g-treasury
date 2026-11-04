@@ -97,21 +97,19 @@ export default function Sidebar({
   const accessibleRoutes = useMemo(() => {
     if (!user) return []
     const routes = getAccessibleRoutes(user)
-    console.log('Accessible routes for user:', user, '=>', routes)
     return routes
   }, [user])
 
   const menuItems = useMemo(() => {
     if (!user) return allMenuItems
     const filtered = allMenuItems.filter((item) => accessibleRoutes.includes(item.id))
-    console.log('Menu items filtered:', filtered)
     return filtered
   }, [user, accessibleRoutes])
 
   const masterItems = useMemo(() => {
     if (!user) return allMasterItems
     const filtered = allMasterItems.filter((item) => accessibleRoutes.includes(item.id))
-    console.log('Master items filtered:', filtered)
+
     return filtered
   }, [user, accessibleRoutes])
 

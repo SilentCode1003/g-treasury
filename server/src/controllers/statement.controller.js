@@ -1,4 +1,4 @@
-console.log('=== STATEMENT CONTROLLER LOADED ===')
+
 require('dotenv').config()
 const { Query, SQLQueryBuilder } = require('../database/utilities/queries.util')
 const { Statement } = require('../database/model/Statement')
@@ -8,11 +8,7 @@ const {
   buildStatementHeaders,
   determineStatementTypeFromHeaders,
 } = require('../utilities/statement.util')
-console.log('Statement object keys:', Object.keys(Statement))
 
-// Temporary: Force error to verify file is loaded
-console.log('STATEMENT_OF_ACCOUNT exists?', !!Statement.statement_of_account)
-console.log('SELECTOPTIONCOLUMNS exists?', !!Statement.statement_of_account?.selectOptionColumns)
 
 const sql = new SQLQueryBuilder()
 
@@ -53,7 +49,6 @@ const getStatements = async (req, res, next) => {
 
     const statements = await Query(query, bindings)
 
-    console.log(statements)
     return res.status(200).json({
       success: true,
       message: 'Statement of accounts retrieved successfully',
@@ -424,21 +419,14 @@ const saveStatementItems = async (req, res, next) => {
 }
 
 const getStatementItems = async (req, res, next) => {
-  console.log("=== getStatementItems START ===")
   try {
     const statementId = Number(req.params.id)
 
-    console.log('Request params:', req.params)
-    console.log('Statement ID (parsed):', statementId)
-    console.log('Statement ID (type):', typeof statementId)
 
     if (!statementId) {
-      console.log('ERROR: Statement id is missing or invalid')
       return res.status(400).json({ success: false, message: 'Statement id is required' })
     }
 
-    console.log('Statement object structure:', Object.keys(Statement))
-    console.log('Statement.statement_items:', Statement.statement_items)
 
     const existingItemsQuery = sql
       .select([
@@ -449,16 +437,11 @@ const getStatementItems = async (req, res, next) => {
       .where(Statement.statement_items.selectOptionColumns.statement_id, statementId)
       .build()
 
-    console.log('Generated SQL:', existingItemsQuery.sql)
-    console.log('Query bindings:', existingItemsQuery.bindings)
 
     const items = await Query(existingItemsQuery.sql, existingItemsQuery.bindings)
 
-    console.log('Raw items from DB:', JSON.stringify(items, null, 2))
-    console.log('Items count:', items?.length)
 
     if (!items || items.length === 0) {
-      console.log('No items found in database for statement_id:', statementId)
       return res.status(200).json({ success: true, data: [], message: 'No items found' })
     }
 
@@ -478,15 +461,11 @@ const getStatementItems = async (req, res, next) => {
       }
     }).filter(Boolean) // Remove any null items from parse errors
 
-    console.log('Parsed rows count:', rows.length)
-    console.log('Parsed rows:', JSON.stringify(rows, null, 2))
-
     // Set cache-control headers to prevent caching
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     res.set('Pragma', 'no-cache')
     res.set('Expires', '0')
 
-    console.log('=== getStatementItems END ===')
     return res.status(200).json({ success: true, data: rows })
   } catch (error) {
     console.error('Error fetching statement items:', error)

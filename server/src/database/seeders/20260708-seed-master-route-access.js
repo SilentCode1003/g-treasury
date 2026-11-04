@@ -8,7 +8,6 @@ module.exports = {
     )
 
     if (!accessRecords || accessRecords.length === 0) {
-      console.log('No ADMIN access found, skipping route access seeding')
       return
     }
 

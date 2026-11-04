@@ -67,7 +67,6 @@ export const SessionProvider = ({ children }) => {
 
       // If session has expired or will expire in less than 5 minutes, logout
       if (timeUntilExpiry <= 0) {
-        console.log('Session expired, logging out...')
         performLogout()
       } else if (timeUntilExpiry < 300000) {
         // Warning: session about to expire in less than 5 minutes
@@ -98,19 +97,15 @@ export const SessionProvider = ({ children }) => {
   }, [])
 
   useEffect(() => {
-    console.log('Setting up session check interval:', CHECK_INTERVAL, 'ms')
     // Start periodic session checking
     const intervalId = setInterval(() => {
-      console.log('Running periodic session check...')
       checkSessionExpiration()
     }, CHECK_INTERVAL)
 
     // Check immediately on mount
-    console.log('Running initial session check...')
     checkSessionExpiration()
 
     return () => {
-      console.log('Clearing session check interval')
       clearInterval(intervalId)
     }
   }, [checkSessionExpiration])

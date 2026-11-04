@@ -524,10 +524,8 @@ export default function Statement() {
         selectedData.map(async (statement) => {
           try {
             const response = await apiClient.get(`/statement/${statement.id}/items`)
-            console.log(`Statement ${statement.id} (${statement.title}) items response:`, response.data)
             const data = response.data?.data || response.data || []
             const rows = Array.isArray(data) ? data : (data.rows || data.items || [])
-            console.log(`Statement ${statement.id} has ${rows.length} rows`)
             return {
               ...statement,
               details: data,
@@ -570,11 +568,9 @@ export default function Statement() {
 
           // Transform rows to match expected format for PDF export
           const rawRows = stmt.rows || stmt.details?.rows || []
-          console.log(`Statement ${stmt.id} raw rows:`, rawRows)
           const rows = rawRows.map(row => {
             // If row has values property, use it; otherwise use row directly
             const values = row.values || row
-            console.log(`Row values:`, values)
             return {
               id: row.id || `row-${Math.random()}`,
               values: values,
@@ -660,19 +656,15 @@ export default function Statement() {
       
       for (const statement of selectedData) {
         try {
-          console.log(`Processing statement ${statement.id}: ${statement.title}`)
 
           // Fetch detailed data for this statement
           const response = await apiClient.get(`/statement/${statement.id}/items`)
-          console.log(`Statement ${statement.id} API response:`, response.data)
 
           const data = response.data?.data || response.data || []
           const rawRows = Array.isArray(data) ? data : (data.rows || data.items || [])
-          console.log(`Statement ${statement.id} has ${rawRows.length} raw rows`)
           
           // Log first row structure for debugging
           if (rawRows.length > 0) {
-            console.log(`Statement ${statement.id} first row structure:`, JSON.stringify(rawRows[0], null, 2))
           }
           
           // Validate that we have rows before proceeding
@@ -743,7 +735,6 @@ export default function Statement() {
           }
           sheetNameTracker.add(uniqueSheetName)
           
-          console.log(`Creating worksheet "${uniqueSheetName}" with ${rows.length} rows`)
 
           await exportStatementToExcel({
             columns,
@@ -758,7 +749,6 @@ export default function Statement() {
             maintenanceFormat: statement.maintenance_format, // Pass maintenance format
           })
 
-          console.log(`Successfully created worksheet for statement ${statement.id}`)
         } catch (err) {
           console.error(`Failed to export statement ${statement.id}:`, err)
           console.error('Error details:', err.response?.data || err.message)
@@ -767,11 +757,7 @@ export default function Statement() {
         }
       }
 
-      // Download the workbook
-      console.log('Writing workbook to buffer...')
-      console.log(`Total worksheets in workbook: ${workbook.worksheets.length}`)
       workbook.worksheets.forEach((ws, idx) => {
-        console.log(`  Worksheet ${idx + 1}: "${ws.name}"`)
       })
       const buffer = await workbook.xlsx.writeBuffer()
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })

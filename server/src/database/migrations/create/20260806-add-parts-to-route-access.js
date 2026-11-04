@@ -8,7 +8,6 @@ module.exports = {
     )
 
     if (!accessRecords || accessRecords.length === 0) {
-      console.log('No access records found, skipping parts route access migration')
       return
     }
 
@@ -23,7 +22,6 @@ module.exports = {
       ignoreDuplicates: true,
     })
 
-    console.log(`Added parts route access for ${accessRecords.length} access records`)
   },
 
   async down(queryInterface, Sequelize) {

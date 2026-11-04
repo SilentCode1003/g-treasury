@@ -424,28 +424,21 @@ function useLoginForm() {
         password,
       })
 
-      console.log('Login response:', response.data)
 
       const userData = response.data?.data || response.data
 
       if (userData) {
         localStorage.setItem('user', JSON.stringify(userData))
-        console.log('User stored in localStorage:', userData)
-        console.log('Session expiration time from backend:', userData.sessionExpiresAt)
 
         // Store session expiration time
         if (userData.sessionExpiresAt) {
           setSessionExpiration(userData.sessionExpiresAt)
-          console.log('Session expiration time stored:', userData.sessionExpiresAt)
-          console.log('Current time:', Date.now())
-          console.log('Time until expiry:', userData.sessionExpiresAt - Date.now())
         } else {
-          console.error('No sessionExpiresAt in response data')
+
         }
       }
 
       setStatus('success')
-      console.log('Navigating to dashboard...')
       navigate({ to: '/dashboard' })
     } catch (err) {
       console.error('Login error:', err)

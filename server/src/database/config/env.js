@@ -52,7 +52,6 @@ const validateEnv = () => {
       console.error(`   - ${issue.path.join('.')}: ${issue.message}`)
     })
 
-    console.log('\n💡 Check your .env file and ensure all required variables are set correctly.\n')
     process.exit(1)
   }
 
