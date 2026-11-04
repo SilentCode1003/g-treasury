@@ -110,27 +110,37 @@ const determineStatementTypeFromHeaders = (headers) => {
   }
 
   // Extract header names (handles both string arrays and object arrays with header property)
-  const headerNames = parsedHeaders.map(h => {
-    if (typeof h === 'string') return h.toLowerCase()
-    if (typeof h === 'object' && h.header) return h.header.toLowerCase()
-    return ''
-  }).filter(Boolean)
+  const headerNames = parsedHeaders
+    .map((h) => {
+      if (typeof h === 'string') return h.toLowerCase()
+      if (typeof h === 'object' && h.header) return h.header.toLowerCase()
+      return ''
+    })
+    .filter(Boolean)
 
   // Check for maintenance formats
-  const hasArea = headerNames.some(h => h.includes('area'))
-  const hasNoOfStore = headerNames.some(h => h.includes('no of store') || h.includes('no_of_store'))
-  const hasPricePerStore = headerNames.some(h => h.includes('price per store') || h.includes('price_per_store'))
-  const hasTotalAmount = headerNames.some(h => h.includes('total amount'))
+  const hasArea = headerNames.some((h) => h.includes('area'))
+  const hasNoOfStore = headerNames.some(
+    (h) => h.includes('no of store') || h.includes('no_of_store'),
+  )
+  const hasPricePerStore = headerNames.some(
+    (h) => h.includes('price per store') || h.includes('price_per_store'),
+  )
+  const hasTotalAmount = headerNames.some((h) => h.includes('total amount'))
 
-  const hasInvoice = headerNames.some(h => h.includes('invoice'))
-  const hasTicketNumber = headerNames.some(h => h.includes('ticket') || h.includes('ticket number'))
-  const hasPartsDescription = headerNames.some(h => h.includes('parts') || h.includes('parts description'))
-  const hasPartsQty = headerNames.some(h => h.includes('qty') || h.includes('parts qty'))
+  const hasInvoice = headerNames.some((h) => h.includes('invoice'))
+  const hasTicketNumber = headerNames.some(
+    (h) => h.includes('ticket') || h.includes('ticket number'),
+  )
+  const hasPartsDescription = headerNames.some(
+    (h) => h.includes('parts') || h.includes('parts description'),
+  )
+  const hasPartsQty = headerNames.some((h) => h.includes('qty') || h.includes('parts qty'))
 
-  const hasServiceDate = headerNames.some(h => h.includes('service date'))
-  const hasWorkDone = headerNames.some(h => h.includes('work done'))
-  const hasVatEx = headerNames.some(h => h.includes('vat-ex') || h.includes('vat_ex'))
-  const hasVatIn = headerNames.some(h => h.includes('vat-in') || h.includes('vat_in'))
+  const hasServiceDate = headerNames.some((h) => h.includes('service date'))
+  const hasWorkDone = headerNames.some((h) => h.includes('work done'))
+  const hasVatEx = headerNames.some((h) => h.includes('vat-ex') || h.includes('vat_ex'))
+  const hasVatIn = headerNames.some((h) => h.includes('vat-in') || h.includes('vat_in'))
 
   // Determine format based on header patterns
   if (hasArea && hasNoOfStore && hasPricePerStore && hasTotalAmount) {
@@ -148,7 +158,6 @@ const determineStatementTypeFromHeaders = (headers) => {
   // Default to SERVICE if no maintenance pattern matches
   return { statement_type: 'SERVICE', maintenance_format: 'REGIONAL_SUMMARY' }
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ONLY CHANGE NEEDED IN YOUR IMPORTS (top of your file):
@@ -1115,15 +1124,8 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           }
         }
 
-        const computedTotal = getComputedSalesTotal(nextValues, columns)
-        const totalSalesColumnKey = columns.find((col) => isTotalSalesColumn(col))?.key
-        const salesColumnKey = columns.find((col) => isSalesColumn(col))?.key
-
-        if (totalSalesColumnKey) {
-          nextValues[totalSalesColumnKey] = computedTotal
-        }
-
         // Calculate service sum only (without additional sales) for sales column
+        const salesColumnKey = columns.find((col) => isSalesColumn(col))?.key
         const serviceColumns = columns.filter((col) => col?.serviceMeta && !isQuantityColumn(col))
         const serviceSum = serviceColumns.reduce((sum, col) => {
           const price = Number(col.serviceMeta?.servicePrice || 0)
@@ -1149,6 +1151,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
           if (salesColumnKey) {
             nextValues[salesColumnKey] = serviceSum
           }
+        }
+
+        const computedTotal = getComputedSalesTotal(nextValues, columns)
+        const totalSalesColumnKey = columns.find((col) => isTotalSalesColumn(col))?.key
+        if (totalSalesColumnKey) {
+          nextValues[totalSalesColumnKey] = computedTotal
         }
 
         // Auto-compute VAT if vatPerRow is enabled
@@ -1736,8 +1744,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             )
                                             openDropdown('store', `${row.id}-${col.key}`) // FIX
                                           }}
-                                          onFocus={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
-                                          onClick={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                          onFocus={() =>
+                                            openDropdown('store', `${row.id}-${col.key}`)
+                                          } // FIX
+                                          onClick={() =>
+                                            openDropdown('store', `${row.id}-${col.key}`)
+                                          } // FIX
                                           onBlur={closeDropdownSoon} // FIX
                                           className="w-full rounded border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                           placeholder="Store no."
@@ -1790,8 +1802,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             handleCellChange(row.id, col.key, e.target.value)
                                             openDropdown('store', `${row.id}-${col.key}`) // FIX
                                           }}
-                                          onFocus={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
-                                          onClick={() => openDropdown('store', `${row.id}-${col.key}`)} // FIX
+                                          onFocus={() =>
+                                            openDropdown('store', `${row.id}-${col.key}`)
+                                          } // FIX
+                                          onClick={() =>
+                                            openDropdown('store', `${row.id}-${col.key}`)
+                                          } // FIX
                                           onBlur={closeDropdownSoon} // FIX
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Store name"
@@ -1940,8 +1956,12 @@ const StatementDetailTable = React.forwardRef(function StatementDetailTable(
                                             )
                                             openDropdown('parts', `${row.id}-${part.id}`) // FIX
                                           }}
-                                          onFocus={() => openDropdown('parts', `${row.id}-${part.id}`)} // FIX
-                                          onClick={() => openDropdown('parts', `${row.id}-${part.id}`)} // FIX
+                                          onFocus={() =>
+                                            openDropdown('parts', `${row.id}-${part.id}`)
+                                          } // FIX
+                                          onClick={() =>
+                                            openDropdown('parts', `${row.id}-${part.id}`)
+                                          } // FIX
                                           onBlur={closeDropdownSoon} // FIX
                                           className="w-full rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 shadow-sm outline-none transition focus:border-red-400 focus:ring-1 focus:ring-red-400"
                                           placeholder="Search or type part"
@@ -4020,7 +4040,10 @@ export default function StatementDetails() {
   const dynamicTableColumns = useMemo(() => {
     // For Regional Summary (Area-based) maintenance, use fixed columns
     const typeFromHeaders = determineStatementTypeFromHeaders(statement?.soa_headers)
-    if (typeFromHeaders.statement_type === 'MAINTENANCE' && typeFromHeaders.maintenance_format === 'REGIONAL_SUMMARY') {
+    if (
+      typeFromHeaders.statement_type === 'MAINTENANCE' &&
+      typeFromHeaders.maintenance_format === 'REGIONAL_SUMMARY'
+    ) {
       return [
         { key: 'area', header: 'AREA', align: 'left' },
         { key: 'noOfStore', header: 'NO OF STORE', align: 'left' },
@@ -4059,12 +4082,12 @@ export default function StatementDetails() {
         typeof header === 'object' ? header.header || header.key || header : header,
       )
       const normalizedHeader = headerText.trim().toLowerCase()
-      
+
       // Check for duplicate header text
       if (seenHeaders.has(normalizedHeader)) {
         return false
       }
-      
+
       // Also check for duplicate service matches to prevent same service appearing twice
       const normalizedServiceHeader = normalizeServiceId(headerText)
       const serviceMatch = services.find((service) => {
@@ -4072,7 +4095,7 @@ export default function StatementDetails() {
         const serviceName = normalizeServiceId(service.name)
         return serviceId === normalizedServiceHeader || serviceName === normalizedServiceHeader
       })
-      
+
       if (serviceMatch) {
         const serviceKey = normalizeHeaderKey(serviceMatch.name || serviceMatch.id)
         if (seenServiceKeys.has(serviceKey)) {
@@ -4080,7 +4103,7 @@ export default function StatementDetails() {
         }
         seenServiceKeys.add(serviceKey)
       }
-      
+
       seenHeaders.add(normalizedHeader)
       return true
     })
@@ -4176,7 +4199,8 @@ export default function StatementDetails() {
         })
 
         // Add QTY column for this service when quantity mode is enabled and this service is checked
-        const isQtyCheckedForThisService = quantityMode === 'add' && quantityEnabledServices.has(serviceKey)
+        const isQtyCheckedForThisService =
+          quantityMode === 'add' && quantityEnabledServices.has(serviceKey)
 
         if (serviceMatch && isQtyCheckedForThisService) {
           columns.push({
@@ -4273,30 +4297,27 @@ export default function StatementDetails() {
     }
   }, [statementId, savedQuantitySelection])
 
-  const documentMeta = useMemo(
-    () => {
-      const headers = statement?.soa_headers
-      const typeFromHeaders = determineStatementTypeFromHeaders(headers)
+  const documentMeta = useMemo(() => {
+    const headers = statement?.soa_headers
+    const typeFromHeaders = determineStatementTypeFromHeaders(headers)
 
-      return {
-        fromCompany: companyMap[statement?.soa_company_from] || {
-          name: statement?.soa_company_from || '',
-        },
-        toCompany: companyMap[statement?.soa_company_to] || {
-          name: statement?.soa_company_to || '',
-        },
-        title: statement?.soa_title || 'STATEMENT OF ACCOUNT',
-        date: formatDateLabel(statement?.soa_date) || statement?.soa_date || '',
-        subTotal: statement?.soa_sub_total,
-        vat: statement?.soa_vat,
-        total: statement?.soa_total,
-        // Always determine from headers to ensure correct type
-        statementType: typeFromHeaders.statement_type,
-        maintenanceFormat: typeFromHeaders.maintenance_format,
-      }
-    },
-    [statement, companyMap],
-  )
+    return {
+      fromCompany: companyMap[statement?.soa_company_from] || {
+        name: statement?.soa_company_from || '',
+      },
+      toCompany: companyMap[statement?.soa_company_to] || {
+        name: statement?.soa_company_to || '',
+      },
+      title: statement?.soa_title || 'STATEMENT OF ACCOUNT',
+      date: formatDateLabel(statement?.soa_date) || statement?.soa_date || '',
+      subTotal: statement?.soa_sub_total,
+      vat: statement?.soa_vat,
+      total: statement?.soa_total,
+      // Always determine from headers to ensure correct type
+      statementType: typeFromHeaders.statement_type,
+      maintenanceFormat: typeFromHeaders.maintenance_format,
+    }
+  }, [statement, companyMap])
 
   const requestExcelExport = (request) => {
     setExcelExportRequest(request)
@@ -4431,86 +4452,87 @@ export default function StatementDetails() {
               </button>
             </div>
           </div>
-        </div> 
-
-{/* ── BRAND MASTER DOCUMENT HEADER PANEL ──────────────────────────────── */}
-<div className="rounded border border-gray-200 bg-white px-4 py-3 shadow-xs lg:shrink-0">
-  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-    
-    {/* Title & Icon Section - Constrained width so it doesn't push the metadata */}
-    <div className="flex items-center gap-3 shrink-0 lg:max-w-md">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-black text-white">
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-      </div>
-      <div>
-        <h1 className="text-xs font-black uppercase tracking-wide text-black leading-snug">
-          {statement.soa_title || 'STATEMENT OF ACCOUNT'}
-        </h1>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-red-600 mt-0.5">
-          Cycle: {formatDateLabel(statement.soa_date)}
-        </p>
-      </div>
-    </div>
-
-    {/* Account Source/Destination Metadata Nodes - Expanded width for legibility */}
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] flex-1">
-      
-      {/* From Node */}
-      <div className="rounded bg-gray-50/80 border border-gray-100 p-2.5 flex flex-col justify-between">
-        <div className="flex items-center justify-between gap-2 mb-1 border-b border-gray-200/60 pb-1">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">From</span>
-          <span className="font-bold text-black text-[11px] leading-tight text-right">
-            {companyMap[statement.soa_company_from]?.name || statement.soa_company_from}
-          </span>
         </div>
-        <div className="text-[10px] text-gray-500 leading-normal space-y-0.5">
-          {companyMap[statement.soa_company_from]?.address && (
-            <p className="line-clamp-2">{companyMap[statement.soa_company_from].address}</p>
-          )}
-          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-400">
-            {companyMap[statement.soa_company_from]?.mobile && (
-              <span>Mobile: {companyMap[statement.soa_company_from].mobile}</span>
-            )}
-            {companyMap[statement.soa_company_from]?.phone && (
-              <span>Phone: {companyMap[statement.soa_company_from].phone}</span>
-            )}
+
+        {/* ── BRAND MASTER DOCUMENT HEADER PANEL ──────────────────────────────── */}
+        <div className="rounded border border-gray-200 bg-white px-4 py-3 shadow-xs lg:shrink-0">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            {/* Title & Icon Section - Constrained width so it doesn't push the metadata */}
+            <div className="flex items-center gap-3 shrink-0 lg:max-w-md">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-black text-white">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-xs font-black uppercase tracking-wide text-black leading-snug">
+                  {statement.soa_title || 'STATEMENT OF ACCOUNT'}
+                </h1>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-red-600 mt-0.5">
+                  Cycle: {formatDateLabel(statement.soa_date)}
+                </p>
+              </div>
+            </div>
+
+            {/* Account Source/Destination Metadata Nodes - Expanded width for legibility */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] flex-1">
+              {/* From Node */}
+              <div className="rounded bg-gray-50/80 border border-gray-100 p-2.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-2 mb-1 border-b border-gray-200/60 pb-1">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                    From
+                  </span>
+                  <span className="font-bold text-black text-[11px] leading-tight text-right">
+                    {companyMap[statement.soa_company_from]?.name || statement.soa_company_from}
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-500 leading-normal space-y-0.5">
+                  {companyMap[statement.soa_company_from]?.address && (
+                    <p className="line-clamp-2">{companyMap[statement.soa_company_from].address}</p>
+                  )}
+                  <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-400">
+                    {companyMap[statement.soa_company_from]?.mobile && (
+                      <span>Mobile: {companyMap[statement.soa_company_from].mobile}</span>
+                    )}
+                    {companyMap[statement.soa_company_from]?.phone && (
+                      <span>Phone: {companyMap[statement.soa_company_from].phone}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* To Node */}
+              <div className="rounded bg-gray-50/80 border border-gray-100 p-2.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-2 mb-1 border-b border-gray-200/60 pb-1">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                    To
+                  </span>
+                  <span className="font-bold text-black text-[11px] leading-tight text-right">
+                    {companyMap[statement.soa_company_to]?.name || statement.soa_company_to}
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-500 leading-normal space-y-0.5">
+                  {companyMap[statement.soa_company_to]?.address && (
+                    <p className="line-clamp-2">{companyMap[statement.soa_company_to].address}</p>
+                  )}
+                  <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-400">
+                    {companyMap[statement.soa_company_to]?.mobile && (
+                      <span>Mobile: {companyMap[statement.soa_company_to].mobile}</span>
+                    )}
+                    {companyMap[statement.soa_company_to]?.phone && (
+                      <span>Phone: {companyMap[statement.soa_company_to].phone}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* To Node */}
-      <div className="rounded bg-gray-50/80 border border-gray-100 p-2.5 flex flex-col justify-between">
-        <div className="flex items-center justify-between gap-2 mb-1 border-b border-gray-200/60 pb-1">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">To</span>
-          <span className="font-bold text-black text-[11px] leading-tight text-right">
-            {companyMap[statement.soa_company_to]?.name || statement.soa_company_to}
-          </span>
-        </div>
-        <div className="text-[10px] text-gray-500 leading-normal space-y-0.5">
-          {companyMap[statement.soa_company_to]?.address && (
-            <p className="line-clamp-2">{companyMap[statement.soa_company_to].address}</p>
-          )}
-          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-400">
-            {companyMap[statement.soa_company_to]?.mobile && (
-              <span>Mobile: {companyMap[statement.soa_company_to].mobile}</span>
-            )}
-            {companyMap[statement.soa_company_to]?.phone && (
-              <span>Phone: {companyMap[statement.soa_company_to].phone}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</div>
 
         {/* Dynamic Table Ingestion Section */}
         {visibleTableColumns.length > 0 ? (

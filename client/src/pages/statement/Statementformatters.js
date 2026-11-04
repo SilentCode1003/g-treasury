@@ -78,7 +78,11 @@ export const isMaterialCostColumn = (col) => {
   const key = String(col.key || '')
     .trim()
     .toLowerCase()
-  return header.includes('material cost') || key.includes('material_cost') || key.includes('materialcost')
+  return (
+    header.includes('material cost') ||
+    key.includes('material_cost') ||
+    key.includes('materialcost')
+  )
 }
 
 export const isAdditionalSalesColumn = (col) => {
@@ -103,10 +107,14 @@ export const isQuantityColumn = (col) => {
   const key = String(col.key || '')
     .trim()
     .toLowerCase()
-  return /(^|\s)qty($|\s|\()/i.test(header) || /(^|_)qty($|_)/i.test(key) ||
-         /(^|\s)quantity($|\s|\()/i.test(header) || /(^|_)quantity($|_)/i.test(key) ||
-         /no of store|no\. of store|number of store|store count/i.test(header) ||
-         /no_of_store|no_of_store|number_of_store|store_count/i.test(key)
+  return (
+    /(^|\s)qty($|\s|\()/i.test(header) ||
+    /(^|_)qty($|_)/i.test(key) ||
+    /(^|\s)quantity($|\s|\()/i.test(header) ||
+    /(^|_)quantity($|_)/i.test(key) ||
+    /no of store|no\. of store|number of store|store count/i.test(header) ||
+    /no_of_store|no_of_store|number_of_store|store_count/i.test(key)
+  )
 }
 
 export const isTotalSalesColumn = (col) => {
@@ -138,7 +146,9 @@ export const parseDecimalInput = (value) => {
 }
 
 export const formatNumberInput = (value) => {
-  const normalized = String(value ?? '').replace(/,/g, '').trim()
+  const normalized = String(value ?? '')
+    .replace(/,/g, '')
+    .trim()
   const parsed = Number(normalized || 0)
   if (!Number.isFinite(parsed)) return ''
   return parsed.toLocaleString('en-PH', {
@@ -148,7 +158,9 @@ export const formatNumberInput = (value) => {
 }
 
 export const formatQuantityInput = (value) => {
-  const normalized = String(value ?? '').replace(/,/g, '').trim()
+  const normalized = String(value ?? '')
+    .replace(/,/g, '')
+    .trim()
   const parsed = Number(normalized || 0)
   if (!Number.isFinite(parsed)) return ''
   return parsed.toLocaleString('en-PH', {
@@ -162,25 +174,39 @@ export const isNumericColumn = (col) => {
   if (col?.serviceMeta) {
     return false
   }
-  
+
   const header = String(col.header || '')
     .trim()
     .toLowerCase()
   const key = String(col.key || '')
     .trim()
     .toLowerCase()
-  
+
   const numericKeywords = [
-    'amount', 'price', 'cost', 'total', 'subtotal',
-    'per store', 'amount per store', 'price per store',
-    'vat', 'tax', 'rate', 'percent', '%',
-    'vat-ex', 'vat-in', 'vatin', 'vatex',
-    'sales', 'additional', 'mobilization', 'material'
+    'amount',
+    'price',
+    'cost',
+    'total',
+    'subtotal',
+    'per store',
+    'amount per store',
+    'price per store',
+    'vat',
+    'tax',
+    'rate',
+    'percent',
+    '%',
+    'vat-ex',
+    'vat-in',
+    'vatin',
+    'vatex',
+    'sales',
+    'additional',
+    'mobilization',
+    'material',
   ]
-  
-  return numericKeywords.some(keyword => 
-    header.includes(keyword) || key.includes(keyword)
-  )
+
+  return numericKeywords.some((keyword) => header.includes(keyword) || key.includes(keyword))
 }
 
 export const getComputedVatValue = (rowTotal = 0, vatRate = 0.12) => {
@@ -189,35 +215,49 @@ export const getComputedVatValue = (rowTotal = 0, vatRate = 0.12) => {
 }
 
 export const isMaintenanceFormat = (columns = []) => {
-  const headers = columns.map(col => String(col.header || '').trim().toLowerCase())
+  const headers = columns.map((col) =>
+    String(col.header || '')
+      .trim()
+      .toLowerCase(),
+  )
   // Regional Summary format
-  const isRegionalSummary = headers.includes('area') && 
-         headers.includes('no of store') && 
-         headers.includes('price per store') && 
-         headers.includes('total amount')
+  const isRegionalSummary =
+    headers.includes('area') &&
+    headers.includes('no of store') &&
+    headers.includes('price per store') &&
+    headers.includes('total amount')
   // Official Invoice format
-  const isOfficialInvoice = headers.includes('area') &&
-         headers.includes('no of store') &&
-         headers.includes('amount per store') &&
-         headers.includes('total vat-ex')
+  const isOfficialInvoice =
+    headers.includes('area') &&
+    headers.includes('no of store') &&
+    headers.includes('amount per store') &&
+    headers.includes('total vat-ex')
   return isRegionalSummary || isOfficialInvoice
 }
 
 export const getMaintenanceTotalAmount = (rowValues = {}, columns = []) => {
-  const headers = columns.map(col => String(col.header || '').trim().toLowerCase())
-  
+  const headers = columns.map((col) =>
+    String(col.header || '')
+      .trim()
+      .toLowerCase(),
+  )
+
   // Check if this is Official Invoice format (uses TOTAL VAT-IN)
   if (headers.includes('total vat-in')) {
     const totalVatInColumn = columns.find((col) => {
-      const header = String(col.header || '').trim().toLowerCase()
+      const header = String(col.header || '')
+        .trim()
+        .toLowerCase()
       return header === 'total vat-in'
     })
     return totalVatInColumn ? parseDecimalInput(rowValues?.[totalVatInColumn.key]) : 0
   }
-  
+
   // Regional Summary format (uses TOTAL AMOUNT)
   const totalAmountColumn = columns.find((col) => {
-    const header = String(col.header || '').trim().toLowerCase()
+    const header = String(col.header || '')
+      .trim()
+      .toLowerCase()
     return header === 'total amount'
   })
   return totalAmountColumn ? parseDecimalInput(rowValues?.[totalAmountColumn.key]) : 0
@@ -228,7 +268,7 @@ export const getComputedSalesTotal = (rowValues = {}, columns = []) => {
   if (isMaintenanceFormat(columns)) {
     return getMaintenanceTotalAmount(rowValues, columns)
   }
-  
+
   // Check if this is parts format
   if (hasPartsColumns(columns)) {
     const partsKeys = getPartsColumnKeys(columns)
@@ -246,7 +286,9 @@ export const getComputedSalesTotal = (rowValues = {}, columns = []) => {
   const serviceColumns = columns.filter((col) => col?.serviceMeta && !isQuantityColumn(col))
 
   const salesValue = salesColumn ? parseDecimalInput(rowValues?.[salesColumn.key]) : 0
-  const materialCostValue = materialCostColumn ? parseDecimalInput(rowValues?.[materialCostColumn.key]) : 0
+  const materialCostValue = materialCostColumn
+    ? parseDecimalInput(rowValues?.[materialCostColumn.key])
+    : 0
   const additionalValue = additionalSalesColumn
     ? parseDecimalInput(rowValues?.[additionalSalesColumn.key])
     : 0
@@ -268,7 +310,7 @@ export const getComputedSalesTotal = (rowValues = {}, columns = []) => {
     return Number((sum + price * effectiveQuantity).toFixed(2))
   }, 0)
 
-  const baseSalesValue = serviceColumns.length > 0 ? serviceSum : salesValue
+  const baseSalesValue = salesColumn ? salesValue : serviceSum
 
   return Number((baseSalesValue + materialCostValue + additionalValue).toFixed(2))
 }
@@ -320,54 +362,56 @@ export const getExportCellValue = (row, col, rowIdx, isPart = false) => {
   if (isRowNumberColumn(col)) {
     return String(rowIdx + 1)
   }
-  
+
   // For parts rows, get value from part.values
-  const value = isPart ? row.values?.[col.key] ?? '' : row.values?.[col.key] ?? ''
-  
+  const value = isPart ? (row.values?.[col.key] ?? '') : (row.values?.[col.key] ?? '')
+
   // Handle checkbox columns (service columns)
   if (col?.serviceMeta) {
     return value === true || value === 'true' || value === 'X' ? 'X' : ''
   }
-  
+
   // Format numeric columns with proper money format (thousands separators, 2 decimals)
   if (isNumericColumn(col) && value !== '' && value !== null && value !== undefined) {
     // Skip if it's a checkbox value
     if (value === true || value === false || value === 'true' || value === 'false') {
       return value === true || value === 'true' ? 'X' : ''
     }
-    
+
     const parsedValue = parseDecimalInput(value)
     if (!isNaN(parsedValue)) {
       return formatDecimalValue(parsedValue)
     }
     return '0.00'
   }
-  
+
   return value
 }
 
 // Check if table has parts columns
 export const hasPartsColumns = (columns = []) => {
-  const headers = columns.map(col => String(col.header || '').toUpperCase())
-  return headers.includes('PARTS DESCRIPTION') && 
-         headers.includes('PARTS QTY.') && 
-         headers.includes('PRICE') && 
-         headers.includes('SUBTOTAL')
+  const headers = columns.map((col) => String(col.header || '').toUpperCase())
+  return (
+    headers.includes('PARTS DESCRIPTION') &&
+    headers.includes('PARTS QTY.') &&
+    headers.includes('PRICE') &&
+    headers.includes('SUBTOTAL')
+  )
 }
 
 // Get parts column keys
 export const getPartsColumnKeys = (columns = []) => {
-  const headers = columns.map(col => ({
+  const headers = columns.map((col) => ({
     key: col.key,
-    header: String(col.header || '').toUpperCase()
+    header: String(col.header || '').toUpperCase(),
   }))
-  
+
   return {
-    partsDescription: headers.find(h => h.header === 'PARTS DESCRIPTION')?.key,
-    partsQty: headers.find(h => h.header === 'PARTS QTY.')?.key,
-    price: headers.find(h => h.header === 'PRICE')?.key,
-    subtotal: headers.find(h => h.header === 'SUBTOTAL')?.key,
-    totalInvoiceAmount: headers.find(h => h.header === 'TOTAL INVOICE AMOUNT')?.key
+    partsDescription: headers.find((h) => h.header === 'PARTS DESCRIPTION')?.key,
+    partsQty: headers.find((h) => h.header === 'PARTS QTY.')?.key,
+    price: headers.find((h) => h.header === 'PRICE')?.key,
+    subtotal: headers.find((h) => h.header === 'SUBTOTAL')?.key,
+    totalInvoiceAmount: headers.find((h) => h.header === 'TOTAL INVOICE AMOUNT')?.key,
   }
 }
 
@@ -376,14 +420,14 @@ export const expandRowsForExport = (rows = [], columns = []) => {
   if (!hasPartsColumns(columns)) {
     return rows
   }
-  
+
   const partsKeys = getPartsColumnKeys(columns)
   const expandedRows = []
   let globalRowIndex = 0
-  
+
   rows.forEach((row) => {
     const parts = row.parts || []
-    
+
     if (parts.length === 0) {
       // No parts, just add the main row
       expandedRows.push({ ...row, values: row.values || {} })
@@ -393,7 +437,7 @@ export const expandRowsForExport = (rows = [], columns = []) => {
       const totalInvoiceAmount = parts.reduce((sum, part) => {
         return sum + (part.values?.subtotal || 0)
       }, 0)
-      
+
       // Add main row (parent) with parts data from first part and TOTAL INVOICE AMOUNT
       const mainRowValues = { ...row.values }
       // Use first part's data for parts columns
@@ -414,22 +458,22 @@ export const expandRowsForExport = (rows = [], columns = []) => {
       if (partsKeys.totalInvoiceAmount) {
         mainRowValues[partsKeys.totalInvoiceAmount] = totalInvoiceAmount
       }
-      
+
       // Mark this row with rowSpan info for PDF export
-      expandedRows.push({ 
-        ...row, 
+      expandedRows.push({
+        ...row,
         values: mainRowValues,
         rowSpan: parts.length,
-        isMainRow: true
+        isMainRow: true,
       })
       globalRowIndex++
-      
+
       // Add remaining parts as separate rows (for Excel only, PDF will use rowSpan)
       for (let i = 1; i < parts.length; i++) {
         const part = parts[i]
         const partRowValues = {}
         // Clear all main columns
-        columns.forEach(col => {
+        columns.forEach((col) => {
           if (!partsKeys.partsDescription || col.key !== partsKeys.partsDescription) {
             if (!partsKeys.partsQty || col.key !== partsKeys.partsQty) {
               if (!partsKeys.price || col.key !== partsKeys.price) {
@@ -457,17 +501,17 @@ export const expandRowsForExport = (rows = [], columns = []) => {
         if (partsKeys.totalInvoiceAmount) {
           partRowValues[partsKeys.totalInvoiceAmount] = ''
         }
-        
-        expandedRows.push({ 
-          ...row, 
+
+        expandedRows.push({
+          ...row,
           values: partRowValues,
           isPartRow: true,
-          parentRowId: row.id
+          parentRowId: row.id,
         })
         globalRowIndex++
       }
     }
   })
-  
+
   return expandedRows
 }
